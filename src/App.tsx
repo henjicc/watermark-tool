@@ -887,17 +887,32 @@ function App() {
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
 
-      // Calculate position based on percentage offsets
-      const offsetX = (settings.offsetX / 100) * (canvas.width / 2);
-      const offsetY = (settings.offsetY / 100) * (canvas.height / 2);
+      // Calculate the bounding box of the rotated watermark
+      const angle = (settings.rotation * Math.PI) / 180;
+      const sin = Math.abs(Math.sin(angle));
+      const cos = Math.abs(Math.cos(angle));
+      const rotatedWidth = maxTextWidth * cos + totalTextHeight * sin;
+      const rotatedHeight = maxTextWidth * sin + totalTextHeight * cos;
 
+      // Calculate the safe area for the center of the watermark
+      const safeWidth = canvas.width - rotatedWidth;
+      const safeHeight = canvas.height - rotatedHeight;
+
+      // Calculate position based on percentage offsets within the safe area
+      const offsetX = (settings.offsetX / 100) * (safeWidth / 2);
+      const offsetY = (settings.offsetY / 100) * (safeHeight / 2);
+
+      // Clamp the final position to ensure the watermark is fully visible
       const x = centerX + offsetX;
-      const y = centerY + offsetY;
+      const y = centerY - offsetY;
+
+      const clampedX = Math.max(rotatedWidth / 2, Math.min(x, canvas.width - rotatedWidth / 2));
+      const clampedY = Math.max(rotatedHeight / 2, Math.min(y, canvas.height - rotatedHeight / 2));
 
       // Draw single watermark with multiple lines
       ctx.save();
       // Translate to the calculated position, then adjust for text alignment
-      ctx.translate(x, y);
+      ctx.translate(clampedX, clampedY);
       ctx.rotate((settings.rotation * Math.PI) / 180);
       
       // 绘制每一行，以文本块的中心为原点
@@ -1293,9 +1308,9 @@ function App() {
 
       // Set vertical offset
       if (position.includes('top')) {
-        offsetY = -100;
-      } else if (position.includes('bottom')) {
         offsetY = 100;
+      } else if (position.includes('bottom')) {
+        offsetY = -100;
       } else {
         offsetY = 0;
       }
@@ -1673,17 +1688,32 @@ function App() {
                 const centerX = img.width / 2;
                 const centerY = img.height / 2;
 
-                // Calculate position based on percentage offsets
-                const offsetX = (settings.offsetX / 100) * (img.width / 2);
-                const offsetY = (settings.offsetY / 100) * (img.height / 2);
+                // Calculate the bounding box of the rotated watermark
+                const angle = (settings.rotation * Math.PI) / 180;
+                const sin = Math.abs(Math.sin(angle));
+                const cos = Math.abs(Math.cos(angle));
+                const rotatedWidth = maxTextWidth * cos + totalTextHeight * sin;
+                const rotatedHeight = maxTextWidth * sin + totalTextHeight * cos;
 
+                // Calculate the safe area for the center of the watermark
+                const safeWidth = img.width - rotatedWidth;
+                const safeHeight = img.height - rotatedHeight;
+
+                // Calculate position based on percentage offsets within the safe area
+                const offsetX = (settings.offsetX / 100) * (safeWidth / 2);
+                const offsetY = (settings.offsetY / 100) * (safeHeight / 2);
+
+                // Clamp the final position to ensure the watermark is fully visible
                 const x = centerX + offsetX;
-                const y = centerY + offsetY;
+                const y = centerY - offsetY;
+
+                const clampedX = Math.max(rotatedWidth / 2, Math.min(x, img.width - rotatedWidth / 2));
+                const clampedY = Math.max(rotatedHeight / 2, Math.min(y, img.height - rotatedHeight / 2));
 
                 // Draw single watermark with multiple lines
                 tempCtx.save();
                 // Translate to the calculated position, then adjust for text alignment
-                tempCtx.translate(x, y);
+                tempCtx.translate(clampedX, clampedY);
                 tempCtx.rotate((settings.rotation * Math.PI) / 180);
                 
                 // 绘制每一行，以文本块的中心为原点
