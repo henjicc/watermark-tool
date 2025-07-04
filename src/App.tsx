@@ -318,7 +318,7 @@ const translations: Translations = {
     opacity: '透明度',
     color: '颜色',
     font: '字体',
-    fullScreenPattern: '全屏模式',
+    fullScreenPattern: '满屏水印',
     sampleWatermark: '示例水印',
     enterWatermarkText: '输入水印文字',
     settings: '设置',
@@ -376,7 +376,7 @@ const translations: Translations = {
       'bottom-left': '左下角',
       'bottom-center': '底部居中',
       'bottom-right': '右下角',
-      'full-screen': '全屏模式'
+      'full-screen': '满屏水印'
     }
   },
   en: {
@@ -460,7 +460,7 @@ const defaultAppSettings: AppSettings = {
   language: 'zh',
   defaultWatermark: '示例水印',
   defaultPosition: 'center',
-  defaultSize: 5,
+  defaultSize: 10,
   defaultRotation: 0,
   defaultOpacity: 0.7,
   defaultColor: '#ffffff',
@@ -1361,6 +1361,14 @@ function App() {
   
   // 优化的设置更新函数，特别针对拖动调整的场景
   const updateSetting = (key: keyof WatermarkSettings, value: string | number) => {
+    if (key === 'position' && value === 'full-screen') {
+      setWatermarkSettings(prev => ({
+        ...prev,
+        position: 'full-screen',
+        rotation: -30,
+      }));
+      return;
+    }
     let newSettings = { ...latestSettingsRef.current, [key]: value };
 
     // 当位置变化时，自动更新位移
@@ -2559,7 +2567,7 @@ function App() {
                       />
                     </div>
                     
-                    {/* 全屏模式下的间隔控制 - 添加过渡动画 */}
+                    {/* 满屏水印下的间隔控制 - 添加过渡动画 */}
                     <div className={`space-y-3 overflow-hidden transition-all duration-300 ease-in-out ${watermarkSettings.position === 'full-screen' ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}>
                       {/* 水平间隔 */}
                       <div>
