@@ -59,6 +59,7 @@ interface AppSettings {
   maxOpacity: number;
   exportFormat: 'auto' | 'jpeg' | 'png' | 'webp';
   exportQuality: number;
+  fontSizeUnit: 'px' | 'percent';
 }
 
 type Language = 'zh' | 'en';
@@ -123,6 +124,9 @@ interface Translations {
     formatJpeg: string;
     formatPng: string;
     formatWebp: string;
+    fontSizeUnit: string;
+    fontSizeUnitPx: string;
+    fontSizeUnitPercent: string;
     positions: {
       'top-left': string;
       'top-center': string;
@@ -195,6 +199,9 @@ interface Translations {
     formatJpeg: string;
     formatPng: string;
     formatWebp: string;
+    fontSizeUnit: string;
+    fontSizeUnitPx: string;
+    fontSizeUnitPercent: string;
     positions: {
       'top-left': string;
       'top-center': string;
@@ -270,6 +277,9 @@ const translations: Translations = {
     formatJpeg: 'JPEG',
     formatPng: 'PNG',
     formatWebp: 'WebP',
+    fontSizeUnit: '字体大小单位',
+    fontSizeUnitPx: '像素',
+    fontSizeUnitPercent: '百分比',
     positions: {
       'top-left': '左上角',
       'top-center': '顶部居中',
@@ -342,6 +352,9 @@ const translations: Translations = {
     formatJpeg: 'JPEG',
     formatPng: 'PNG',
     formatWebp: 'WebP',
+    fontSizeUnit: 'Font Size Unit',
+    fontSizeUnitPx: 'Pixels',
+    fontSizeUnitPercent: 'Percentage',
     positions: {
       'top-left': 'Top Left',
       'top-center': 'Top Center',
@@ -360,8 +373,8 @@ const translations: Translations = {
 const defaultAppSettings: AppSettings = {
   language: 'zh',
   defaultWatermark: '示例水印',
-  defaultPosition: 'bottom-right',
-  defaultSize: 24,
+  defaultPosition: 'center',
+  defaultSize: 5,
   defaultRotation: 0,
   defaultOpacity: 0.7,
   defaultColor: '#ffffff',
@@ -370,12 +383,13 @@ const defaultAppSettings: AppSettings = {
   defaultOffsetY: 0,
   defaultSpacingX: 2,
   defaultSpacingY: 4,
-  minSize: 8,
-  maxSize: 200,
+  minSize: 1,
+  maxSize: 20,
   minOpacity: 0.1,
   maxOpacity: 1.0,
   exportFormat: 'auto',
-  exportQuality: 0.95
+  exportQuality: 0.95,
+  fontSizeUnit: 'percent'
 };
 
 interface ImageData {
@@ -385,6 +399,7 @@ interface ImageData {
   image: HTMLImageElement;
   watermarkSettings: WatermarkSettings;
   canvas?: HTMLCanvasElement;
+  originalFile?: File; // 保存原始文件引用（用于HEIC转换后的EXIF处理）
 }
 
 function App() {
@@ -705,7 +720,8 @@ function App() {
           file: processedFile,
           url,
           image: img,
-          watermarkSettings: { ...watermarkSettings }
+          watermarkSettings: { ...watermarkSettings },
+          originalFile: isHeicFormat ? file : undefined // 保存原始HEIC文件引用
         };
         
         newImages.push(imageData);
@@ -776,9 +792,20 @@ function App() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(image, 0, 0);
 
-    // 计算稳定的字体大小 - 预先缓存计算结果
+    // 计算稳定的字体大小 - 根据单位类型计算
     const baseFontSize = settings.size;
-    const actualFontSize = Math.max(8, Math.min(200, baseFontSize));
+    let actualFontSize: number;
+    
+    if (appSettings.fontSizeUnit === 'percent') {
+      // 百分比模式：基于图片较小边的百分比
+      const minDimension = Math.min(image.width, image.height);
+      actualFontSize = (baseFontSize / 100) * minDimension;
+      // 限制字体大小范围
+      actualFontSize = Math.max(8, Math.min(minDimension * 0.5, actualFontSize));
+    } else {
+      // 像素模式：直接使用像素值
+      actualFontSize = Math.max(8, Math.min(200, baseFontSize));
+    }
 
     // Set watermark style with stable values
     ctx.font = `${actualFontSize}px ${settings.fontFamily}`;
@@ -806,19 +833,40 @@ function App() {
 
     if (settings.position === 'full-screen') {
       // Full screen watermark pattern with stable spacing
-      // Use user-defined spacing multipliers
-      const spacingX = maxTextWidth * settings.spacingX;
-      const spacingY = totalTextHeight * settings.spacingY;
+      // Calculate spacing based on unit type
+      let spacingX: number, spacingY: number;
+      if (appSettings.fontSizeUnit === 'percent') {
+        // 百分比模式：基于图片尺寸的百分比
+        const minDimension = Math.min(canvas.width, canvas.height);
+        spacingX = (settings.spacingX / 100) * minDimension;
+        spacingY = (settings.spacingY / 100) * minDimension;
+      } else {
+        // 像素模式：使用倍数
+        spacingX = maxTextWidth * settings.spacingX;
+        spacingY = totalTextHeight * settings.spacingY;
+      }
       
       // Calculate grid bounds
       const cols = Math.ceil(canvas.width / spacingX) + 2;
       const rows = Math.ceil(canvas.height / spacingY) + 2;
       
+      // Calculate offsets based on unit type
+      let offsetX: number, offsetY: number;
+      if (appSettings.fontSizeUnit === 'percent') {
+        // 百分比模式：基于图片尺寸的百分比
+        offsetX = (settings.offsetX / 100) * canvas.width;
+        offsetY = (settings.offsetY / 100) * canvas.height;
+      } else {
+        // 像素模式：直接使用像素值
+        offsetX = settings.offsetX;
+        offsetY = settings.offsetY;
+      }
+      
       // Draw watermark grid with consistent positioning and apply offsets
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
-          const baseX = col * spacingX - spacingX / 2 + settings.offsetX;
-          const baseY = row * spacingY + totalTextHeight / 2 + settings.offsetY;
+          const baseX = col * spacingX - spacingX / 2 + offsetX;
+          const baseY = row * spacingY + totalTextHeight / 2 + offsetY;
           
           ctx.save();
           ctx.translate(baseX + maxTextWidth / 2, baseY);
@@ -836,62 +884,27 @@ function App() {
       }
     } else {
       // Single watermark with stable positioning
-      const padding = 20;
-      let x = 0, y = 0;
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
 
-      // Fixed position calculations
-      switch (settings.position) {
-        case 'top-left':
-          x = padding;
-          y = padding + totalTextHeight / 2;
-          break;
-        case 'top-center':
-          x = (canvas.width - maxTextWidth) / 2;
-          y = padding + totalTextHeight / 2;
-          break;
-        case 'top-right':
-          x = canvas.width - maxTextWidth - padding;
-          y = padding + totalTextHeight / 2;
-          break;
-        case 'middle-left':
-          x = padding;
-          y = canvas.height / 2;
-          break;
-        case 'center':
-          x = (canvas.width - maxTextWidth) / 2;
-          y = canvas.height / 2;
-          break;
-        case 'middle-right':
-          x = canvas.width - maxTextWidth - padding;
-          y = canvas.height / 2;
-          break;
-        case 'bottom-left':
-          x = padding;
-          y = canvas.height - padding - totalTextHeight / 2;
-          break;
-        case 'bottom-center':
-          x = (canvas.width - maxTextWidth) / 2;
-          y = canvas.height - padding - totalTextHeight / 2;
-          break;
-        case 'bottom-right':
-          x = canvas.width - maxTextWidth - padding;
-          y = canvas.height - padding - totalTextHeight / 2;
-          break;
-      }
-      
-      // 应用XY位移
-      x += settings.offsetX;
-      y += settings.offsetY;
+      // Calculate position based on percentage offsets
+      const offsetX = (settings.offsetX / 100) * (canvas.width / 2);
+      const offsetY = (settings.offsetY / 100) * (canvas.height / 2);
+
+      const x = centerX + offsetX;
+      const y = centerY + offsetY;
 
       // Draw single watermark with multiple lines
       ctx.save();
-      ctx.translate(x + maxTextWidth / 2, y);
+      // Translate to the calculated position, then adjust for text alignment
+      ctx.translate(x, y);
       ctx.rotate((settings.rotation * Math.PI) / 180);
       
-      // 绘制每一行
+      // 绘制每一行，以文本块的中心为原点
       lines.forEach((line, lineIndex) => {
         const lineY = (lineIndex - (lines.length - 1) / 2) * lineHeight;
         const lineWidth = lineWidths[lineIndex];
+        // Adjust for textAlign = 'left' by offsetting by half width
         ctx.fillText(line, -lineWidth / 2, lineY);
       });
       
@@ -945,7 +958,7 @@ function App() {
     }
   }, [currentImage, drawWatermark]);
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!canvasRef.current || !currentImage) return;
     
     const canvas = canvasRef.current;
@@ -990,8 +1003,269 @@ function App() {
       }
     }
     
+    // 获取canvas的base64数据
+    let dataURL = canvas.toDataURL(outputFormat, quality);
+    
+    // 如果导出格式是JPEG，尝试保留原始图片的EXIF信息
+    if (outputFormat === 'image/jpeg') {
+      try {
+        // 优先使用原始文件（HEIC转换前的文件），如果不存在则使用当前文件
+        const sourceFile = currentImage.originalFile || currentImage.file;
+        
+        // 检查是否为HEIC格式
+        const isHeicFormat = sourceFile.type === 'image/heic' || 
+                            sourceFile.type === 'image/heif' || 
+                            sourceFile.name.toLowerCase().endsWith('.heic') || 
+                            sourceFile.name.toLowerCase().endsWith('.heif');
+        
+        let exifData: any;
+        
+        if (isHeicFormat) {
+          // 使用exifreader处理HEIC文件的EXIF信息
+          console.log('检测到HEIC格式，使用exifreader提取EXIF信息...');
+          const ExifReader = await import('exifreader');
+          
+          // 读取文件为ArrayBuffer
+          const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as ArrayBuffer);
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(sourceFile);
+          });
+          
+          // 使用exifreader解析HEIC文件的EXIF信息
+          const tags = ExifReader.default.load(arrayBuffer);
+          
+          if (tags && Object.keys(tags).length > 0) {
+            // 转换exifreader格式到piexifjs格式
+            exifData = {
+              '0th': {},
+              'Exif': {},
+              'GPS': {},
+              '1st': {}
+            };
+            
+            // 扩展的EXIF标签映射表
+            const tagMapping: { [key: string]: { ifd: string; tag: number } } = {
+              // 0th IFD (主图像信息)
+              'Make': { ifd: '0th', tag: 271 },
+              'Model': { ifd: '0th', tag: 272 },
+              'Orientation': { ifd: '0th', tag: 274 },
+              'XResolution': { ifd: '0th', tag: 282 },
+              'YResolution': { ifd: '0th', tag: 283 },
+              'ResolutionUnit': { ifd: '0th', tag: 296 },
+              'Software': { ifd: '0th', tag: 305 },
+              'DateTime': { ifd: '0th', tag: 306 },
+              'Artist': { ifd: '0th', tag: 315 },
+              'WhitePoint': { ifd: '0th', tag: 318 },
+              'PrimaryChromaticities': { ifd: '0th', tag: 319 },
+              'YCbCrCoefficients': { ifd: '0th', tag: 529 },
+              'YCbCrPositioning': { ifd: '0th', tag: 531 },
+              'ReferenceBlackWhite': { ifd: '0th', tag: 532 },
+              'Copyright': { ifd: '0th', tag: 33432 },
+              
+              // Exif IFD (拍摄参数)
+              'ExposureTime': { ifd: 'Exif', tag: 33434 },
+              'FNumber': { ifd: 'Exif', tag: 33437 },
+              'ExposureProgram': { ifd: 'Exif', tag: 34850 },
+              'SpectralSensitivity': { ifd: 'Exif', tag: 34852 },
+              'ISO': { ifd: 'Exif', tag: 34855 },
+              'ISOSpeedRatings': { ifd: 'Exif', tag: 34855 },
+              'OECF': { ifd: 'Exif', tag: 34856 },
+              'SensitivityType': { ifd: 'Exif', tag: 34864 },
+              'ExifVersion': { ifd: 'Exif', tag: 36864 },
+              'DateTimeOriginal': { ifd: 'Exif', tag: 36867 },
+              'DateTimeDigitized': { ifd: 'Exif', tag: 36868 },
+              'OffsetTime': { ifd: 'Exif', tag: 36880 },
+              'OffsetTimeOriginal': { ifd: 'Exif', tag: 36881 },
+              'OffsetTimeDigitized': { ifd: 'Exif', tag: 36882 },
+              'ComponentsConfiguration': { ifd: 'Exif', tag: 37121 },
+              'CompressedBitsPerPixel': { ifd: 'Exif', tag: 37122 },
+              'ShutterSpeedValue': { ifd: 'Exif', tag: 37377 },
+              'ApertureValue': { ifd: 'Exif', tag: 37378 },
+              'BrightnessValue': { ifd: 'Exif', tag: 37379 },
+              'ExposureBiasValue': { ifd: 'Exif', tag: 37380 },
+              'MaxApertureValue': { ifd: 'Exif', tag: 37381 },
+              'SubjectDistance': { ifd: 'Exif', tag: 37382 },
+              'MeteringMode': { ifd: 'Exif', tag: 37383 },
+              'LightSource': { ifd: 'Exif', tag: 37384 },
+              'Flash': { ifd: 'Exif', tag: 37385 },
+              'FocalLength': { ifd: 'Exif', tag: 37386 },
+              'SubjectArea': { ifd: 'Exif', tag: 37396 },
+              'MakerNote': { ifd: 'Exif', tag: 37500 },
+              'UserComment': { ifd: 'Exif', tag: 37510 },
+              'SubSecTime': { ifd: 'Exif', tag: 37520 },
+              'SubSecTimeOriginal': { ifd: 'Exif', tag: 37521 },
+              'SubSecTimeDigitized': { ifd: 'Exif', tag: 37522 },
+              'FlashpixVersion': { ifd: 'Exif', tag: 40960 },
+              'ColorSpace': { ifd: 'Exif', tag: 40961 },
+              'PixelXDimension': { ifd: 'Exif', tag: 40962 },
+              'PixelYDimension': { ifd: 'Exif', tag: 40963 },
+              'RelatedSoundFile': { ifd: 'Exif', tag: 40964 },
+              'FlashEnergy': { ifd: 'Exif', tag: 41483 },
+              'SpatialFrequencyResponse': { ifd: 'Exif', tag: 41484 },
+              'FocalPlaneXResolution': { ifd: 'Exif', tag: 41486 },
+              'FocalPlaneYResolution': { ifd: 'Exif', tag: 41487 },
+              'FocalPlaneResolutionUnit': { ifd: 'Exif', tag: 41488 },
+              'SubjectLocation': { ifd: 'Exif', tag: 41492 },
+              'ExposureIndex': { ifd: 'Exif', tag: 41493 },
+              'SensingMethod': { ifd: 'Exif', tag: 41495 },
+              'FileSource': { ifd: 'Exif', tag: 41728 },
+              'SceneType': { ifd: 'Exif', tag: 41729 },
+              'CFAPattern': { ifd: 'Exif', tag: 41730 },
+              'CustomRendered': { ifd: 'Exif', tag: 41985 },
+              'ExposureMode': { ifd: 'Exif', tag: 41986 },
+              'WhiteBalance': { ifd: 'Exif', tag: 41987 },
+              'DigitalZoomRatio': { ifd: 'Exif', tag: 41988 },
+              'FocalLengthIn35mmFilm': { ifd: 'Exif', tag: 41989 },
+              'SceneCaptureType': { ifd: 'Exif', tag: 41990 },
+              'GainControl': { ifd: 'Exif', tag: 41991 },
+              'Contrast': { ifd: 'Exif', tag: 41992 },
+              'Saturation': { ifd: 'Exif', tag: 41993 },
+              'Sharpness': { ifd: 'Exif', tag: 41994 },
+              'DeviceSettingDescription': { ifd: 'Exif', tag: 41995 },
+              'SubjectDistanceRange': { ifd: 'Exif', tag: 41996 },
+              'ImageUniqueID': { ifd: 'Exif', tag: 42016 },
+              'CameraOwnerName': { ifd: 'Exif', tag: 42032 },
+              'BodySerialNumber': { ifd: 'Exif', tag: 42033 },
+              'LensSpecification': { ifd: 'Exif', tag: 42034 },
+              'LensMake': { ifd: 'Exif', tag: 42035 },
+              'LensModel': { ifd: 'Exif', tag: 42036 },
+              'LensSerialNumber': { ifd: 'Exif', tag: 42037 },
+              
+              // GPS IFD (位置信息)
+              'GPSVersionID': { ifd: 'GPS', tag: 0 },
+              'GPSLatitudeRef': { ifd: 'GPS', tag: 1 },
+              'GPSLatitude': { ifd: 'GPS', tag: 2 },
+              'GPSLongitudeRef': { ifd: 'GPS', tag: 3 },
+              'GPSLongitude': { ifd: 'GPS', tag: 4 },
+              'GPSAltitudeRef': { ifd: 'GPS', tag: 5 },
+              'GPSAltitude': { ifd: 'GPS', tag: 6 },
+              'GPSTimeStamp': { ifd: 'GPS', tag: 7 },
+              'GPSSatellites': { ifd: 'GPS', tag: 8 },
+              'GPSStatus': { ifd: 'GPS', tag: 9 },
+              'GPSMeasureMode': { ifd: 'GPS', tag: 10 },
+              'GPSDOP': { ifd: 'GPS', tag: 11 },
+              'GPSSpeedRef': { ifd: 'GPS', tag: 12 },
+              'GPSSpeed': { ifd: 'GPS', tag: 13 },
+              'GPSTrackRef': { ifd: 'GPS', tag: 14 },
+              'GPSTrack': { ifd: 'GPS', tag: 15 },
+              'GPSImgDirectionRef': { ifd: 'GPS', tag: 16 },
+              'GPSImgDirection': { ifd: 'GPS', tag: 17 },
+              'GPSMapDatum': { ifd: 'GPS', tag: 18 },
+              'GPSDestLatitudeRef': { ifd: 'GPS', tag: 19 },
+              'GPSDestLatitude': { ifd: 'GPS', tag: 20 },
+              'GPSDestLongitudeRef': { ifd: 'GPS', tag: 21 },
+              'GPSDestLongitude': { ifd: 'GPS', tag: 22 },
+              'GPSDestBearingRef': { ifd: 'GPS', tag: 23 },
+              'GPSDestBearing': { ifd: 'GPS', tag: 24 },
+              'GPSDestDistanceRef': { ifd: 'GPS', tag: 25 },
+              'GPSDestDistance': { ifd: 'GPS', tag: 26 },
+              'GPSProcessingMethod': { ifd: 'GPS', tag: 27 },
+              'GPSAreaInformation': { ifd: 'GPS', tag: 28 },
+              'GPSDateStamp': { ifd: 'GPS', tag: 29 },
+              'GPSDifferential': { ifd: 'GPS', tag: 30 },
+              'GPSHPositioningError': { ifd: 'GPS', tag: 31 }
+            };
+            
+            // 转换标签，支持更复杂的数据类型处理
+            Object.keys(tags).forEach(tagName => {
+              const mapping = tagMapping[tagName];
+              if (mapping && tags[tagName] && tags[tagName].value !== undefined) {
+                let value = tags[tagName].value;
+                
+                // 处理特殊的数据类型
+                if (Array.isArray(value)) {
+                  // 对于数组类型，保持原样或转换为适当格式
+                  if (tagName === 'GPSLatitude' || tagName === 'GPSLongitude') {
+                              // GPS坐标需要特殊处理
+                              value = value.map((v: any) => {
+                                if (typeof v === 'object' && v && 'numerator' in v && 'denominator' in v) {
+                                  return [v.numerator, v.denominator];
+                                }
+                                return v;
+                              }) as any;
+                  } else {
+                    // 对于其他数组类型，转换为字符串
+                    value = value.join(', ') as any;
+                  }
+                } else if (typeof value === 'object' && value && 'numerator' in value && 'denominator' in value) {
+                            // 处理分数类型（如曝光时间、光圈值等）
+                            value = [(value as any).numerator, (value as any).denominator] as any;
+                } else if (typeof value === 'string' && value.length > 100) {
+                  // 对于过长的字符串（如MakerNote），截断以避免问题
+                  value = value.substring(0, 100);
+                }
+                
+                exifData[mapping.ifd][mapping.tag] = value;
+              }
+            });
+            
+            // 记录映射的标签数量
+            const mappedCount = Object.keys(tags).filter(tagName => tagMapping[tagName]).length;
+            console.log(`成功从HEIC文件提取EXIF信息: 总共${Object.keys(tags).length}个标签，映射了${mappedCount}个标签`);
+            
+            // 输出未映射的标签以便调试
+            const unmappedTags = Object.keys(tags).filter(tagName => !tagMapping[tagName]);
+            if (unmappedTags.length > 0) {
+              console.log('未映射的EXIF标签:', unmappedTags.slice(0, 10)); // 只显示前10个
+            }
+            
+            
+          }
+        } else {
+          // 使用piexifjs处理JPEG文件的EXIF信息
+          const piexif = await import('piexifjs');
+          
+          const originalImageData = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const arrayBuffer = reader.result as ArrayBuffer;
+              const uint8Array = new Uint8Array(arrayBuffer);
+              const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('');
+              resolve(btoa(binaryString));
+            };
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(sourceFile);
+          });
+          
+          try {
+            exifData = piexif.default.load('data:image/jpeg;base64,' + originalImageData);
+            console.log('成功从JPEG文件提取EXIF信息');
+          } catch (exifError) {
+            console.log('原始图片没有EXIF信息或格式不支持:', exifError);
+          }
+        }
+        
+        // 如果成功提取到EXIF信息，将其插入到新图片中
+        if (exifData && Object.keys(exifData).length > 0) {
+          const piexif = await import('piexifjs');
+          
+          // 移除可能导致问题的缩略图数据
+          if (exifData['thumbnail']) {
+            delete exifData['thumbnail'];
+          }
+          
+          // 更新图片尺寸信息
+          if (exifData['Exif']) {
+            exifData['Exif'][piexif.default.ExifIFD.PixelXDimension] = canvas.width;
+            exifData['Exif'][piexif.default.ExifIFD.PixelYDimension] = canvas.height;
+          }
+          
+          // 将EXIF信息插入到新图片中
+          const exifBytes = piexif.default.dump(exifData);
+          dataURL = piexif.default.insert(exifBytes, dataURL);
+          
+          console.log('成功保留EXIF信息到导出图片');
+        }
+      } catch (error) {
+        console.error('处理EXIF信息时出错:', error);
+        // 如果处理EXIF失败，继续使用原始dataURL
+      }
+    }
+    
     link.download = `watermarked-${currentImage.file.name.replace(/\.[^/.]+$/, fileExtension)}`;
-    link.href = canvas.toDataURL(outputFormat, quality);
+    link.href = dataURL;
     link.click();
   };
 
@@ -1000,8 +1274,36 @@ function App() {
   
   // 优化的设置更新函数，特别针对拖动调整的场景
   const updateSetting = (key: keyof WatermarkSettings, value: string | number) => {
+    let newSettings = { ...latestSettingsRef.current, [key]: value };
+
+    // 当位置变化时，自动更新位移
+    if (key === 'position') {
+      const position = value as string;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      // Set horizontal offset
+      if (position.includes('left')) {
+        offsetX = -100;
+      } else if (position.includes('right')) {
+        offsetX = 100;
+      } else {
+        offsetX = 0;
+      }
+
+      // Set vertical offset
+      if (position.includes('top')) {
+        offsetY = -100;
+      } else if (position.includes('bottom')) {
+        offsetY = 100;
+      } else {
+        offsetY = 0;
+      }
+
+      newSettings = { ...newSettings, offsetX, offsetY };
+    }
+
     // 更新最新设置的引用
-    const newSettings = { ...latestSettingsRef.current, [key]: value };
     latestSettingsRef.current = newSettings;
     
     // 使用 requestAnimationFrame 优化 UI 更新
@@ -1261,10 +1563,10 @@ function App() {
 
 
   // 批量操作函数
-  const handleBatchDownload = () => {
+  const handleBatchDownload = async () => {
     if (selectedImageIds.size > 0) {
       // 下载选中的图片
-      selectedImageIds.forEach(imageId => {
+      for (const imageId of selectedImageIds) {
         const imageData = images.find(img => img.id === imageId);
         if (imageData) {
           // 创建临时canvas来渲染水印
@@ -1273,7 +1575,7 @@ function App() {
           if (!tempCtx) return;
           
           const img = new Image();
-          img.onload = () => {
+          img.onload = async () => {
             tempCanvas.width = img.width;
             tempCanvas.height = img.height;
             tempCtx.drawImage(img, 0, 0);
@@ -1281,8 +1583,19 @@ function App() {
             // 应用水印设置
             const settings = imageData.watermarkSettings;
             if (settings.text) {
-              // 计算字体大小
-              const actualFontSize = Math.max(8, Math.min(200, settings.size));
+              // 计算字体大小 - 根据单位类型计算
+              let actualFontSize: number;
+              
+              if (appSettings.fontSizeUnit === 'percent') {
+                // 百分比模式：基于图片较小边的百分比
+                const minDimension = Math.min(img.width, img.height);
+                actualFontSize = (settings.size / 100) * minDimension;
+                // 限制字体大小范围
+                actualFontSize = Math.max(8, Math.min(minDimension * 0.5, actualFontSize));
+              } else {
+                // 像素模式：直接使用像素值
+                actualFontSize = Math.max(8, Math.min(200, settings.size));
+              }
               
               // 设置水印样式
               tempCtx.font = `${actualFontSize}px ${settings.fontFamily}`;
@@ -1310,16 +1623,37 @@ function App() {
               
               if (settings.position === 'full-screen') {
                 // 全屏水印模式
-                const spacingX = maxTextWidth * settings.spacingX;
-                const spacingY = totalTextHeight * settings.spacingY;
+                // Calculate spacing based on unit type
+                let spacingX: number, spacingY: number;
+                if (appSettings.fontSizeUnit === 'percent') {
+                  // 百分比模式：基于图片尺寸的百分比
+                  spacingX = (settings.spacingX / 100) * img.width;
+                  spacingY = (settings.spacingY / 100) * img.height;
+                } else {
+                  // 像素模式：基于文字尺寸的倍数
+                  spacingX = maxTextWidth * settings.spacingX;
+                  spacingY = totalTextHeight * settings.spacingY;
+                }
+                
+                // Calculate offsets based on unit type
+                let offsetX: number, offsetY: number;
+                if (appSettings.fontSizeUnit === 'percent') {
+                  // 百分比模式：基于图片尺寸的百分比
+                  offsetX = (settings.offsetX / 100) * img.width;
+                  offsetY = (settings.offsetY / 100) * img.height;
+                } else {
+                  // 像素模式：直接使用像素值
+                  offsetX = settings.offsetX;
+                  offsetY = settings.offsetY;
+                }
                 
                 const cols = Math.ceil(img.width / spacingX) + 2;
                 const rows = Math.ceil(img.height / spacingY) + 2;
                 
                 for (let row = 0; row < rows; row++) {
                   for (let col = 0; col < cols; col++) {
-                    const baseX = col * spacingX - spacingX / 2 + settings.offsetX;
-                    const baseY = row * spacingY + totalTextHeight / 2 + settings.offsetY;
+                    const baseX = col * spacingX - spacingX / 2 + offsetX;
+                    const baseY = row * spacingY + totalTextHeight / 2 + offsetY;
                     
                     tempCtx.save();
                     tempCtx.translate(baseX + maxTextWidth / 2, baseY);
@@ -1335,60 +1669,28 @@ function App() {
                   }
                 }
               } else {
-                // 单个水印模式
-                const padding = 20;
-                let x = 0, y = 0;
-                
-                switch (settings.position) {
-                  case 'top-left':
-                    x = padding;
-                    y = padding + totalTextHeight / 2;
-                    break;
-                  case 'top-center':
-                    x = (img.width - maxTextWidth) / 2;
-                    y = padding + totalTextHeight / 2;
-                    break;
-                  case 'top-right':
-                    x = img.width - maxTextWidth - padding;
-                    y = padding + totalTextHeight / 2;
-                    break;
-                  case 'middle-left':
-                    x = padding;
-                    y = img.height / 2;
-                    break;
-                  case 'center':
-                    x = (img.width - maxTextWidth) / 2;
-                    y = img.height / 2;
-                    break;
-                  case 'middle-right':
-                    x = img.width - maxTextWidth - padding;
-                    y = img.height / 2;
-                    break;
-                  case 'bottom-left':
-                    x = padding;
-                    y = img.height - padding - totalTextHeight / 2;
-                    break;
-                  case 'bottom-center':
-                    x = (img.width - maxTextWidth) / 2;
-                    y = img.height - padding - totalTextHeight / 2;
-                    break;
-                  case 'bottom-right':
-                    x = img.width - maxTextWidth - padding;
-                    y = img.height - padding - totalTextHeight / 2;
-                    break;
-                }
-                
-                // 应用XY位移
-                x += settings.offsetX;
-                y += settings.offsetY;
-                
+                // Single watermark with stable positioning
+                const centerX = img.width / 2;
+                const centerY = img.height / 2;
+
+                // Calculate position based on percentage offsets
+                const offsetX = (settings.offsetX / 100) * (img.width / 2);
+                const offsetY = (settings.offsetY / 100) * (img.height / 2);
+
+                const x = centerX + offsetX;
+                const y = centerY + offsetY;
+
+                // Draw single watermark with multiple lines
                 tempCtx.save();
-                tempCtx.translate(x + maxTextWidth / 2, y);
+                // Translate to the calculated position, then adjust for text alignment
+                tempCtx.translate(x, y);
                 tempCtx.rotate((settings.rotation * Math.PI) / 180);
                 
+                // 绘制每一行，以文本块的中心为原点
                 lines.forEach((line, lineIndex) => {
                   const lineY = (lineIndex - (lines.length - 1) / 2) * lineHeight;
                   const lineWidth = lineWidths[lineIndex];
+                  // Adjust for textAlign = 'left' by offsetting by half width
                   tempCtx.fillText(line, -lineWidth / 2, lineY);
                 });
                 
@@ -1406,14 +1708,275 @@ function App() {
             const outputFormat = hasAlpha ? 'image/png' : 'image/jpeg';
             const quality = hasAlpha ? undefined : 0.95;
             
+            // 获取canvas的base64数据
+            let dataURL = tempCanvas.toDataURL(outputFormat, quality);
+            
+            // 如果导出格式是JPEG，尝试保留原始图片的EXIF信息
+            if (outputFormat === 'image/jpeg') {
+              try {
+                // 优先使用原始文件（HEIC转换前的文件），如果不存在则使用当前文件
+                const sourceFile = imageData.originalFile || imageData.file;
+                
+                // 检查是否为HEIC格式
+                const isHeicFormat = sourceFile.type === 'image/heic' || 
+                                    sourceFile.type === 'image/heif' || 
+                                    sourceFile.name.toLowerCase().endsWith('.heic') || 
+                                    sourceFile.name.toLowerCase().endsWith('.heif');
+                
+                let exifData: any;
+                
+                if (isHeicFormat) {
+                  // 使用exifreader处理HEIC文件的EXIF信息
+                  console.log('检测到HEIC格式，使用exifreader提取EXIF信息...');
+                  const ExifReader = await import('exifreader');
+                  
+                  // 读取文件为ArrayBuffer
+                  const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result as ArrayBuffer);
+                    reader.onerror = reject;
+                    reader.readAsArrayBuffer(sourceFile);
+                  });
+                  
+                  // 使用exifreader解析HEIC文件的EXIF信息
+                  const tags = ExifReader.default.load(arrayBuffer);
+                  
+                  if (tags && Object.keys(tags).length > 0) {
+                    // 转换exifreader格式到piexifjs格式
+                    exifData = {
+                      '0th': {},
+                      'Exif': {},
+                      'GPS': {},
+                      '1st': {}
+                    };
+                    
+                    // 扩展的EXIF标签映射表
+                     const tagMapping: { [key: string]: { ifd: string; tag: number } } = {
+                       // 0th IFD (主图像信息)
+                       'Make': { ifd: '0th', tag: 271 },
+                       'Model': { ifd: '0th', tag: 272 },
+                       'Orientation': { ifd: '0th', tag: 274 },
+                       'XResolution': { ifd: '0th', tag: 282 },
+                       'YResolution': { ifd: '0th', tag: 283 },
+                       'ResolutionUnit': { ifd: '0th', tag: 296 },
+                       'Software': { ifd: '0th', tag: 305 },
+                       'DateTime': { ifd: '0th', tag: 306 },
+                       'Artist': { ifd: '0th', tag: 315 },
+                       'WhitePoint': { ifd: '0th', tag: 318 },
+                       'PrimaryChromaticities': { ifd: '0th', tag: 319 },
+                       'YCbCrCoefficients': { ifd: '0th', tag: 529 },
+                       'YCbCrPositioning': { ifd: '0th', tag: 531 },
+                       'ReferenceBlackWhite': { ifd: '0th', tag: 532 },
+                       'Copyright': { ifd: '0th', tag: 33432 },
+                       
+                       // Exif IFD (拍摄参数)
+                       'ExposureTime': { ifd: 'Exif', tag: 33434 },
+                       'FNumber': { ifd: 'Exif', tag: 33437 },
+                       'ExposureProgram': { ifd: 'Exif', tag: 34850 },
+                       'SpectralSensitivity': { ifd: 'Exif', tag: 34852 },
+                       'ISO': { ifd: 'Exif', tag: 34855 },
+                       'ISOSpeedRatings': { ifd: 'Exif', tag: 34855 },
+                       'OECF': { ifd: 'Exif', tag: 34856 },
+                       'SensitivityType': { ifd: 'Exif', tag: 34864 },
+                       'ExifVersion': { ifd: 'Exif', tag: 36864 },
+                       'DateTimeOriginal': { ifd: 'Exif', tag: 36867 },
+                       'DateTimeDigitized': { ifd: 'Exif', tag: 36868 },
+                       'OffsetTime': { ifd: 'Exif', tag: 36880 },
+                       'OffsetTimeOriginal': { ifd: 'Exif', tag: 36881 },
+                       'OffsetTimeDigitized': { ifd: 'Exif', tag: 36882 },
+                       'ComponentsConfiguration': { ifd: 'Exif', tag: 37121 },
+                       'CompressedBitsPerPixel': { ifd: 'Exif', tag: 37122 },
+                       'ShutterSpeedValue': { ifd: 'Exif', tag: 37377 },
+                       'ApertureValue': { ifd: 'Exif', tag: 37378 },
+                       'BrightnessValue': { ifd: 'Exif', tag: 37379 },
+                       'ExposureBiasValue': { ifd: 'Exif', tag: 37380 },
+                       'MaxApertureValue': { ifd: 'Exif', tag: 37381 },
+                       'SubjectDistance': { ifd: 'Exif', tag: 37382 },
+                       'MeteringMode': { ifd: 'Exif', tag: 37383 },
+                       'LightSource': { ifd: 'Exif', tag: 37384 },
+                       'Flash': { ifd: 'Exif', tag: 37385 },
+                       'FocalLength': { ifd: 'Exif', tag: 37386 },
+                       'SubjectArea': { ifd: 'Exif', tag: 37396 },
+                       'MakerNote': { ifd: 'Exif', tag: 37500 },
+                       'UserComment': { ifd: 'Exif', tag: 37510 },
+                       'SubSecTime': { ifd: 'Exif', tag: 37520 },
+                       'SubSecTimeOriginal': { ifd: 'Exif', tag: 37521 },
+                       'SubSecTimeDigitized': { ifd: 'Exif', tag: 37522 },
+                       'FlashpixVersion': { ifd: 'Exif', tag: 40960 },
+                       'ColorSpace': { ifd: 'Exif', tag: 40961 },
+                       'PixelXDimension': { ifd: 'Exif', tag: 40962 },
+                       'PixelYDimension': { ifd: 'Exif', tag: 40963 },
+                       'RelatedSoundFile': { ifd: 'Exif', tag: 40964 },
+                       'FlashEnergy': { ifd: 'Exif', tag: 41483 },
+                       'SpatialFrequencyResponse': { ifd: 'Exif', tag: 41484 },
+                       'FocalPlaneXResolution': { ifd: 'Exif', tag: 41486 },
+                       'FocalPlaneYResolution': { ifd: 'Exif', tag: 41487 },
+                       'FocalPlaneResolutionUnit': { ifd: 'Exif', tag: 41488 },
+                       'SubjectLocation': { ifd: 'Exif', tag: 41492 },
+                       'ExposureIndex': { ifd: 'Exif', tag: 41493 },
+                       'SensingMethod': { ifd: 'Exif', tag: 41495 },
+                       'FileSource': { ifd: 'Exif', tag: 41728 },
+                       'SceneType': { ifd: 'Exif', tag: 41729 },
+                       'CFAPattern': { ifd: 'Exif', tag: 41730 },
+                       'CustomRendered': { ifd: 'Exif', tag: 41985 },
+                       'ExposureMode': { ifd: 'Exif', tag: 41986 },
+                       'WhiteBalance': { ifd: 'Exif', tag: 41987 },
+                       'DigitalZoomRatio': { ifd: 'Exif', tag: 41988 },
+                       'FocalLengthIn35mmFilm': { ifd: 'Exif', tag: 41989 },
+                       'SceneCaptureType': { ifd: 'Exif', tag: 41990 },
+                       'GainControl': { ifd: 'Exif', tag: 41991 },
+                       'Contrast': { ifd: 'Exif', tag: 41992 },
+                       'Saturation': { ifd: 'Exif', tag: 41993 },
+                       'Sharpness': { ifd: 'Exif', tag: 41994 },
+                       'DeviceSettingDescription': { ifd: 'Exif', tag: 41995 },
+                       'SubjectDistanceRange': { ifd: 'Exif', tag: 41996 },
+                       'ImageUniqueID': { ifd: 'Exif', tag: 42016 },
+                       'CameraOwnerName': { ifd: 'Exif', tag: 42032 },
+                       'BodySerialNumber': { ifd: 'Exif', tag: 42033 },
+                       'LensSpecification': { ifd: 'Exif', tag: 42034 },
+                       'LensMake': { ifd: 'Exif', tag: 42035 },
+                       'LensModel': { ifd: 'Exif', tag: 42036 },
+                       'LensSerialNumber': { ifd: 'Exif', tag: 42037 },
+                       
+                       // GPS IFD (位置信息)
+                       'GPSVersionID': { ifd: 'GPS', tag: 0 },
+                       'GPSLatitudeRef': { ifd: 'GPS', tag: 1 },
+                       'GPSLatitude': { ifd: 'GPS', tag: 2 },
+                       'GPSLongitudeRef': { ifd: 'GPS', tag: 3 },
+                       'GPSLongitude': { ifd: 'GPS', tag: 4 },
+                       'GPSAltitudeRef': { ifd: 'GPS', tag: 5 },
+                       'GPSAltitude': { ifd: 'GPS', tag: 6 },
+                       'GPSTimeStamp': { ifd: 'GPS', tag: 7 },
+                       'GPSSatellites': { ifd: 'GPS', tag: 8 },
+                       'GPSStatus': { ifd: 'GPS', tag: 9 },
+                       'GPSMeasureMode': { ifd: 'GPS', tag: 10 },
+                       'GPSDOP': { ifd: 'GPS', tag: 11 },
+                       'GPSSpeedRef': { ifd: 'GPS', tag: 12 },
+                       'GPSSpeed': { ifd: 'GPS', tag: 13 },
+                       'GPSTrackRef': { ifd: 'GPS', tag: 14 },
+                       'GPSTrack': { ifd: 'GPS', tag: 15 },
+                       'GPSImgDirectionRef': { ifd: 'GPS', tag: 16 },
+                       'GPSImgDirection': { ifd: 'GPS', tag: 17 },
+                       'GPSMapDatum': { ifd: 'GPS', tag: 18 },
+                       'GPSDestLatitudeRef': { ifd: 'GPS', tag: 19 },
+                       'GPSDestLatitude': { ifd: 'GPS', tag: 20 },
+                       'GPSDestLongitudeRef': { ifd: 'GPS', tag: 21 },
+                       'GPSDestLongitude': { ifd: 'GPS', tag: 22 },
+                       'GPSDestBearingRef': { ifd: 'GPS', tag: 23 },
+                       'GPSDestBearing': { ifd: 'GPS', tag: 24 },
+                       'GPSDestDistanceRef': { ifd: 'GPS', tag: 25 },
+                       'GPSDestDistance': { ifd: 'GPS', tag: 26 },
+                       'GPSProcessingMethod': { ifd: 'GPS', tag: 27 },
+                       'GPSAreaInformation': { ifd: 'GPS', tag: 28 },
+                       'GPSDateStamp': { ifd: 'GPS', tag: 29 },
+                       'GPSDifferential': { ifd: 'GPS', tag: 30 },
+                       'GPSHPositioningError': { ifd: 'GPS', tag: 31 }
+                     };
+                     
+                     // 转换标签，支持更复杂的数据类型处理
+                     Object.keys(tags).forEach(tagName => {
+                       const mapping = tagMapping[tagName];
+                       if (mapping && tags[tagName] && tags[tagName].value !== undefined) {
+                         let value = tags[tagName].value;
+                         
+                         // 处理特殊的数据类型
+                         if (Array.isArray(value)) {
+                           // 对于数组类型，保持原样或转换为适当格式
+                           if (tagName === 'GPSLatitude' || tagName === 'GPSLongitude') {
+                             // GPS坐标需要特殊处理
+                             value = value.map((v: any) => {
+                               if (typeof v === 'object' && v && 'numerator' in v && 'denominator' in v) {
+                                 return [v.numerator, v.denominator];
+                               }
+                               return v;
+                             }) as any;
+                           } else {
+                             // 对于其他数组类型，转换为字符串
+                             value = value.join(', ') as any;
+                           }
+                         } else if (typeof value === 'object' && value && 'numerator' in value && 'denominator' in value) {
+                           // 处理分数类型（如曝光时间、光圈值等）
+                           value = [(value as any).numerator, (value as any).denominator] as any;
+                         } else if (typeof value === 'string' && value.length > 100) {
+                           // 对于过长的字符串（如MakerNote），截断以避免问题
+                           value = value.substring(0, 100);
+                         }
+                         
+                         exifData[mapping.ifd][mapping.tag] = value;
+                       }
+                     });
+                     
+                     // 记录映射的标签数量
+                     const mappedCount = Object.keys(tags).filter(tagName => tagMapping[tagName]).length;
+                     console.log(`成功从HEIC文件提取EXIF信息: 总共${Object.keys(tags).length}个标签，映射了${mappedCount}个标签`);
+                     
+                     // 输出未映射的标签以便调试
+                     const unmappedTags = Object.keys(tags).filter(tagName => !tagMapping[tagName]);
+                     if (unmappedTags.length > 0) {
+                       console.log('未映射的EXIF标签:', unmappedTags.slice(0, 10)); // 只显示前10个
+                     }
+                    
+       
+                  }
+                } else {
+                  // 使用piexifjs处理JPEG文件的EXIF信息
+                  const piexif = await import('piexifjs');
+                  
+                  const originalImageData = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const arrayBuffer = reader.result as ArrayBuffer;
+                      const uint8Array = new Uint8Array(arrayBuffer);
+                      const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('');
+                      resolve(btoa(binaryString));
+                    };
+                    reader.onerror = reject;
+                    reader.readAsArrayBuffer(sourceFile);
+                  });
+                  
+                  try {
+                    exifData = piexif.default.load('data:image/jpeg;base64,' + originalImageData);
+                    console.log('成功从JPEG文件提取EXIF信息');
+                  } catch (exifError) {
+                    console.log('原始图片没有EXIF信息或格式不支持:', exifError);
+                  }
+                }
+                
+                // 如果成功提取到EXIF信息，将其插入到新图片中
+                if (exifData && Object.keys(exifData).length > 0) {
+                  const piexif = await import('piexifjs');
+                  
+                  // 移除可能导致问题的缩略图数据
+                  if (exifData['thumbnail']) {
+                    delete exifData['thumbnail'];
+                  }
+                  
+                  // 更新图片尺寸信息
+                  if (exifData['Exif']) {
+                    exifData['Exif'][piexif.default.ExifIFD.PixelXDimension] = tempCanvas.width;
+                    exifData['Exif'][piexif.default.ExifIFD.PixelYDimension] = tempCanvas.height;
+                  }
+                  
+                  // 将EXIF信息插入到新图片中
+                  const exifBytes = piexif.default.dump(exifData);
+                  dataURL = piexif.default.insert(exifBytes, dataURL);
+                  
+                  console.log('成功保留EXIF信息到导出图片');
+                }
+              } catch (error) {
+                console.error('处理EXIF信息时出错:', error);
+                // 如果处理EXIF失败，继续使用原始dataURL
+              }
+            }
+            
             const link = document.createElement('a');
             link.download = `watermarked-${imageData.file.name.replace(/\.[^/.]+$/, hasAlpha ? '.png' : '.jpg')}`;
-            link.href = tempCanvas.toDataURL(outputFormat, quality);
+            link.href = dataURL;
             link.click();
           };
           img.src = imageData.url;
         }
-      });
+      }
     } else if (currentImage) {
       // 如果没有选中图片，下载当前图片
       handleDownload();
@@ -1864,30 +2427,36 @@ function App() {
                     {/* 水平位移 */}
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-2">
-                        {t.offsetX}: {watermarkSettings.offsetX}px
+                        {t.offsetX}: {watermarkSettings.offsetX.toFixed(0)}%
                       </label>
                       <input
                         type="range"
                         min="-100"
                         max="100"
+                        step="1"
                         value={watermarkSettings.offsetX}
-                        onChange={(e) => updateSetting('offsetX', parseInt(e.target.value))}
+                        onChange={(e) => updateSetting('offsetX', parseInt(e.target.value, 10))}
+                        onDoubleClick={() => updateSetting('offsetX', appSettings.defaultOffsetX)}
                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                        title="双击恢复默认值"
                       />
                     </div>
                     
                     {/* 垂直位移 */}
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-2">
-                        {t.offsetY}: {watermarkSettings.offsetY}px
+                        {t.offsetY}: {watermarkSettings.offsetY.toFixed(0)}%
                       </label>
                       <input
                         type="range"
                         min="-100"
                         max="100"
+                        step="1"
                         value={watermarkSettings.offsetY}
-                        onChange={(e) => updateSetting('offsetY', parseInt(e.target.value))}
+                        onChange={(e) => updateSetting('offsetY', parseInt(e.target.value, 10))}
+                        onDoubleClick={() => updateSetting('offsetY', appSettings.defaultOffsetY)}
                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                        title="双击恢复默认值"
                       />
                     </div>
                     
@@ -1896,32 +2465,36 @@ function App() {
                       {/* 水平间隔 */}
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-2">
-                          {t.spacingX}: {watermarkSettings.spacingX}x
+                          {t.spacingX}: {appSettings.fontSizeUnit === 'percent' ? watermarkSettings.spacingX.toFixed(1) + '%' : watermarkSettings.spacingX + 'x'}
                         </label>
                         <input
                           type="range"
                           min="1"
                           max="10"
-                          step="0.5"
+                          step={appSettings.fontSizeUnit === 'percent' ? '0.1' : '0.5'}
                           value={watermarkSettings.spacingX}
                           onChange={(e) => updateSetting('spacingX', parseFloat(e.target.value))}
+                          onDoubleClick={() => updateSetting('spacingX', appSettings.defaultSpacingX)}
                           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                          title="双击恢复默认值"
                         />
                       </div>
                       
                       {/* 垂直间隔 */}
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-2">
-                          {t.spacingY}: {watermarkSettings.spacingY}x
+                          {t.spacingY}: {appSettings.fontSizeUnit === 'percent' ? watermarkSettings.spacingY.toFixed(1) + '%' : watermarkSettings.spacingY + 'x'}
                         </label>
                         <input
                           type="range"
                           min="1"
                           max="10"
-                          step="0.5"
+                          step={appSettings.fontSizeUnit === 'percent' ? '0.1' : '0.5'}
                           value={watermarkSettings.spacingY}
                           onChange={(e) => updateSetting('spacingY', parseFloat(e.target.value))}
+                          onDoubleClick={() => updateSetting('spacingY', appSettings.defaultSpacingY)}
                           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                          title="双击恢复默认值"
                         />
                       </div>
                     </div>
@@ -1939,15 +2512,18 @@ function App() {
                     {/* Size */}
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-2">
-                        {t.size}: {watermarkSettings.size}px
+                        {t.size}: {appSettings.fontSizeUnit === 'percent' ? watermarkSettings.size.toFixed(1) : watermarkSettings.size}{appSettings.fontSizeUnit === 'percent' ? '%' : 'px'}
                       </label>
                       <input
                         type="range"
                         min={appSettings.minSize}
                         max={appSettings.maxSize}
+                        step={appSettings.fontSizeUnit === 'percent' ? '0.1' : '1'}
                         value={watermarkSettings.size}
-                        onChange={(e) => updateSetting('size', parseInt(e.target.value))}
+                        onChange={(e) => updateSetting('size', appSettings.fontSizeUnit === 'percent' ? parseFloat(e.target.value) : parseInt(e.target.value))}
+                        onDoubleClick={() => updateSetting('size', appSettings.defaultSize)}
                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                        title="双击恢复默认值"
                       />
                     </div>
 
@@ -1965,7 +2541,9 @@ function App() {
                         max="180"
                         value={watermarkSettings.rotation}
                         onChange={(e) => updateSetting('rotation', parseInt(e.target.value))}
+                        onDoubleClick={() => updateSetting('rotation', appSettings.defaultRotation)}
                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                        title="双击恢复默认值"
                       />
                     </div>
 
@@ -1984,7 +2562,9 @@ function App() {
                         step="0.1"
                         value={watermarkSettings.opacity}
                         onChange={(e) => updateSetting('opacity', parseFloat(e.target.value))}
+                        onDoubleClick={() => updateSetting('opacity', appSettings.defaultOpacity)}
                         className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                        title="双击恢复默认值"
                       />
                     </div>
 
@@ -2202,6 +2782,19 @@ function App() {
                           onChange={(e) => setTempSettings(prev => ({ ...prev, defaultSize: parseInt(e.target.value) }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {translations[tempSettings.language].fontSizeUnit}
+                        </label>
+                        <select
+                          value={tempSettings.fontSizeUnit}
+                          onChange={(e) => setTempSettings(prev => ({ ...prev, fontSizeUnit: e.target.value as 'px' | 'percent' }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="percent">{translations[tempSettings.language].fontSizeUnitPercent}</option>
+                          <option value="px">{translations[tempSettings.language].fontSizeUnitPx}</option>
+                        </select>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2428,8 +3021,10 @@ function App() {
                         step="0.05"
                         value={tempSettings.exportQuality}
                         onChange={(e) => setTempSettings(prev => ({ ...prev, exportQuality: parseFloat(e.target.value) }))}
+                        onDoubleClick={() => setTempSettings(prev => ({ ...prev, exportQuality: defaultAppSettings.exportQuality }))}
                         className="flex-1"
                         disabled={tempSettings.exportFormat === 'png'}
+                        title="双击恢复默认值"
                       />
                       <span className="text-sm text-gray-600 w-12">
                         {Math.round(tempSettings.exportQuality * 100)}%
