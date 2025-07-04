@@ -4,7 +4,7 @@ import Upload from 'lucide-react/dist/esm/icons/upload';
 import Download from 'lucide-react/dist/esm/icons/download';
 import Type from 'lucide-react/dist/esm/icons/type';
 
-import Eye from 'lucide-react/dist/esm/icons/eye';
+
 import Palette from 'lucide-react/dist/esm/icons/palette';
 import Grid3X3 from 'lucide-react/dist/esm/icons/grid-3x3';
 import Maximize2 from 'lucide-react/dist/esm/icons/maximize-2';
@@ -18,6 +18,21 @@ import CheckSquare from 'lucide-react/dist/esm/icons/check-square';
 import Square from 'lucide-react/dist/esm/icons/square';
 import Loader2 from 'lucide-react/dist/esm/icons/loader-2';
 import Plus from 'lucide-react/dist/esm/icons/plus';
+
+// Custom hook for handling double tap on touch devices
+const useDoubleTap = (callback: () => void, delay = 300) => {
+  const lastTap = useRef(0);
+
+  const handleTouchStart = () => {
+    const now = Date.now();
+    if (now - lastTap.current < delay) {
+      callback();
+    }
+    lastTap.current = now;
+  };
+
+  return { onTouchStart: handleTouchStart };
+};
 
 const EditableNumber = ({
   value,
@@ -513,6 +528,14 @@ function App() {
   const [contextMenu, setContextMenu] = useState<{x: number, y: number, show: boolean, isClosing: boolean}>({x: 0, y: 0, show: false, isClosing: false});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const offsetXDoubleTap = useDoubleTap(() => updateSetting('offsetX', appSettings.defaultOffsetX));
+  const offsetYDoubleTap = useDoubleTap(() => updateSetting('offsetY', appSettings.defaultOffsetY));
+  const spacingXDoubleTap = useDoubleTap(() => updateSetting('spacingX', appSettings.defaultSpacingX));
+  const spacingYDoubleTap = useDoubleTap(() => updateSetting('spacingY', appSettings.defaultSpacingY));
+  const sizeDoubleTap = useDoubleTap(() => updateSetting('size', appSettings.defaultSize));
+  const rotationDoubleTap = useDoubleTap(() => updateSetting('rotation', appSettings.defaultRotation));
+  const opacityDoubleTap = useDoubleTap(() => updateSetting('opacity', appSettings.defaultOpacity));
   
   // Stable watermark settings that don't change based on image dimensions
   const [watermarkSettings, setWatermarkSettings] = useState<WatermarkSettings>({
@@ -933,7 +956,7 @@ function App() {
 
       // Calculate grid bounds
       const cols = Math.ceil(canvas.width / spacingX) + 2;
-      const rows = Math.ceil(canvas.height / spacingY) + 2;
+      const rows = Math.floor(canvas.height / spacingY) + 2;
       
       // Draw watermark grid with consistent positioning and apply offsets
       for (let row = 0; row < rows; row++) {
@@ -2369,13 +2392,7 @@ function App() {
                       >
                         <Download className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center justify-center w-10 h-10 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors shadow-sm"
-                        title={t.uploadNewImage}
-                      >
-                        <Upload className="w-4 h-4" />
-                      </button>
+
                     </div>
                     {images.length > 1 && selectedImageIds.size > 0 && (
                       <span className="text-sm text-gray-600 font-medium">
@@ -2524,7 +2541,7 @@ function App() {
                   {/* 位移控制 - 所有模式都显示 */}
                   <div className="mt-4 space-y-3">
                     {/* 水平位移 */}
-                    <div>
+                    <div data-control="offsetX" {...offsetXDoubleTap}>
                       <EditableNumber
                         label={`${t.offsetX}:`}
                         value={watermarkSettings.offsetX}
@@ -2547,7 +2564,7 @@ function App() {
                     </div>
                     
                     {/* 垂直位移 */}
-                    <div>
+                    <div data-control="offsetY" {...offsetYDoubleTap}>
                       <EditableNumber
                         label={`${t.offsetY}:`}
                         value={watermarkSettings.offsetY}
@@ -2572,7 +2589,7 @@ function App() {
                     {/* 满屏水印下的间隔控制 - 添加过渡动画 */}
                     <div className={`space-y-3 overflow-hidden transition-all duration-300 ease-in-out ${watermarkSettings.position === 'full-screen' ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}>
                       {/* 水平间隔 */}
-                      <div>
+                      <div data-control="spacingX" {...spacingXDoubleTap}>
                         <EditableNumber
                           label={`${t.spacingX}:`}
                           value={watermarkSettings.spacingX}
@@ -2596,7 +2613,7 @@ function App() {
                       </div>
                       
                       {/* 垂直间隔 */}
-                      <div>
+                      <div data-control="spacingY" {...spacingYDoubleTap}>
                         <EditableNumber
                           label={`${t.spacingY}:`}
                           value={watermarkSettings.spacingY}
@@ -2631,7 +2648,7 @@ function App() {
                   
                   <div className="space-y-4">
                     {/* Size */}
-                    <div>
+                    <div data-control="size" {...sizeDoubleTap}>
                       <EditableNumber
                         label={`${t.size}:`}
                         value={watermarkSettings.size}
@@ -2655,7 +2672,7 @@ function App() {
                     </div>
 
                     {/* Rotation */}
-                    <div>
+                    <div data-control="rotation" {...rotationDoubleTap}>
                       <EditableNumber
                         label={`${t.rotation}:`}
                         value={watermarkSettings.rotation}
@@ -2679,7 +2696,7 @@ function App() {
                     </div>
 
                     {/* Opacity */}
-                    <div>
+                    <div data-control="opacity" {...opacityDoubleTap}>
                       <EditableNumber
                         label={`${t.opacity}:`}
                         value={watermarkSettings.opacity}
