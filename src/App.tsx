@@ -467,10 +467,10 @@ const defaultAppSettings: AppSettings = {
   defaultFontFamily: 'Arial',
   defaultOffsetX: 0,
   defaultOffsetY: 0,
-  defaultSpacingX: 2,
-  defaultSpacingY: 4,
+  defaultSpacingX: 100,
+  defaultSpacingY: 100,
   minSize: 1,
-  maxSize: 20,
+  maxSize: 100,
   minOpacity: 0.1,
   maxOpacity: 1.0,
   exportFormat: 'auto',
@@ -883,11 +883,14 @@ function App() {
     let actualFontSize: number;
     
     if (appSettings.fontSizeUnit === 'percent') {
-      // 百分比模式：基于图片较小边的百分比
-      const minDimension = Math.min(image.width, image.height);
-      actualFontSize = (baseFontSize / 100) * minDimension;
-      // 限制字体大小范围
-      actualFontSize = Math.max(8, Math.min(minDimension * 0.5, actualFontSize));
+      // 百分比模式：基于文本宽度与图片宽度的比例
+      const tempFont = `10px ${settings.fontFamily}`;
+      ctx.font = tempFont;
+      const textMetrics = ctx.measureText(settings.text.split('\n')[0] || ' ');
+      const initialWidth = textMetrics.width;
+      const scaleRatio = image.width / initialWidth;
+      actualFontSize = 10 * scaleRatio * (baseFontSize / 100);
+      actualFontSize = Math.max(8, actualFontSize);
     } else {
       // 像素模式：直接使用像素值
       actualFontSize = Math.max(8, Math.min(200, baseFontSize));
@@ -1671,12 +1674,15 @@ function App() {
               let actualFontSize: number;
               
               if (appSettings.fontSizeUnit === 'percent') {
-                // 百分比模式：基于图片较小边的百分比
-                const minDimension = Math.min(img.width, img.height);
-                actualFontSize = (settings.size / 100) * minDimension;
-                // 限制字体大小范围
-                actualFontSize = Math.max(8, Math.min(minDimension * 0.5, actualFontSize));
-              } else {
+                  // 百分比模式：基于文本宽度与图片宽度的比例
+                  const tempFont = `10px ${settings.fontFamily}`;
+                  tempCtx.font = tempFont;
+                  const textMetrics = tempCtx.measureText(settings.text.split('\n')[0] || ' ');
+                  const initialWidth = textMetrics.width;
+                  const scaleRatio = img.width / initialWidth;
+                  actualFontSize = 10 * scaleRatio * (settings.size / 100);
+                  actualFontSize = Math.max(8, actualFontSize);
+                } else {
                 // 像素模式：直接使用像素值
                 actualFontSize = Math.max(8, Math.min(200, settings.size));
               }
@@ -2564,12 +2570,12 @@ function App() {
                           unit={appSettings.fontSizeUnit === 'percent' ? '%' : 'x'}
                           step={appSettings.fontSizeUnit === 'percent' ? 0.1 : 0.5}
                           min={1}
-                          max={100}
+                          max={200}
                         />
                         <input
                           type="range"
                           min="1"
-                          max="100"
+                          max="200"
                           step={appSettings.fontSizeUnit === 'percent' ? '0.1' : '0.5'}
                           value={watermarkSettings.spacingX}
                           onChange={(e) => updateSetting('spacingX', parseFloat(e.target.value))}
@@ -2588,12 +2594,12 @@ function App() {
                           unit={appSettings.fontSizeUnit === 'percent' ? '%' : 'x'}
                           step={appSettings.fontSizeUnit === 'percent' ? 0.1 : 0.5}
                           min={1}
-                          max={100}
+                          max={200}
                         />
                         <input
                           type="range"
                           min="1"
-                          max="100"
+                          max="200"
                           step={appSettings.fontSizeUnit === 'percent' ? '0.1' : '0.5'}
                           value={watermarkSettings.spacingY}
                           onChange={(e) => updateSetting('spacingY', parseFloat(e.target.value))}
