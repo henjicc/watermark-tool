@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Upload from 'lucide-react/dist/esm/icons/upload';
 import Download from 'lucide-react/dist/esm/icons/download';
 import Type from 'lucide-react/dist/esm/icons/type';
-import RotateCw from 'lucide-react/dist/esm/icons/rotate-cw';
+
 import Eye from 'lucide-react/dist/esm/icons/eye';
 import Palette from 'lucide-react/dist/esm/icons/palette';
 import Grid3X3 from 'lucide-react/dist/esm/icons/grid-3x3';
@@ -17,6 +17,92 @@ import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw';
 import CheckSquare from 'lucide-react/dist/esm/icons/check-square';
 import Square from 'lucide-react/dist/esm/icons/square';
 import Loader2 from 'lucide-react/dist/esm/icons/loader-2';
+
+const EditableNumber = ({
+  value,
+  onChange,
+  min,
+  max,
+  step,
+  unit,
+  label,
+  toFixedValue,
+}: {
+  value: number;
+  onChange: (newValue: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  label: string;
+  toFixedValue?: number;
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentValue, setCurrentValue] = useState(String(value));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setCurrentValue(String(value));
+  }, [value]);
+
+  useEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    let numericValue = parseFloat(currentValue);
+    if (isNaN(numericValue)) {
+      numericValue = value; // revert if invalid
+    }
+    if (min !== undefined) numericValue = Math.max(min, numericValue);
+    if (max !== undefined) numericValue = Math.min(max, numericValue);
+    onChange(numericValue);
+    setCurrentValue(String(numericValue));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleBlur();
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+      setCurrentValue(String(value));
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between text-xs font-medium text-gray-700">
+      <span>{label}</span>
+      {
+        isEditing ? (
+          <input
+            ref={inputRef}
+            type="number"
+            value={currentValue}
+            onChange={(e) => setCurrentValue(e.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            min={min}
+            max={max}
+            step={step}
+            className="w-24 text-right border border-gray-300 rounded-md px-2 py-1 text-sm bg-white"
+          />
+        ) : (
+          <span
+            onClick={() => setIsEditing(true)}
+            className="cursor-pointer hover:bg-gray-200 px-2 py-1 rounded-md tabular-nums"
+            title="点击修改"
+          >
+            {value.toFixed(toFixedValue ?? (step && step < 1 ? 2 : (unit === '%' || unit === '°' || unit === 'x' ? 1 : 0)))}{unit}
+          </span>
+        )
+      }
+    </div>
+  );
+};
 
 
 interface WatermarkSettings {
@@ -833,34 +919,17 @@ function App() {
 
     if (settings.position === 'full-screen') {
       // Full screen watermark pattern with stable spacing
-      // Calculate spacing based on unit type
-      let spacingX: number, spacingY: number;
-      if (appSettings.fontSizeUnit === 'percent') {
-        // 百分比模式：基于图片尺寸的百分比
-        const minDimension = Math.min(canvas.width, canvas.height);
-        spacingX = (settings.spacingX / 100) * minDimension;
-        spacingY = (settings.spacingY / 100) * minDimension;
-      } else {
-        // 像素模式：使用倍数
-        spacingX = maxTextWidth * settings.spacingX;
-        spacingY = totalTextHeight * settings.spacingY;
-      }
-      
+      // Spacing is now a multiplier of the watermark's dimensions
+      const spacingX = maxTextWidth + settings.spacingX;
+      const spacingY = totalTextHeight + settings.spacingY;
+
+      // Calculate offsets as a percentage of the canvas size
+      const offsetX = (settings.offsetX / 100) * canvas.width;
+      const offsetY = (settings.offsetY / 100) * canvas.height;
+
       // Calculate grid bounds
       const cols = Math.ceil(canvas.width / spacingX) + 2;
       const rows = Math.ceil(canvas.height / spacingY) + 2;
-      
-      // Calculate offsets based on unit type
-      let offsetX: number, offsetY: number;
-      if (appSettings.fontSizeUnit === 'percent') {
-        // 百分比模式：基于图片尺寸的百分比
-        offsetX = (settings.offsetX / 100) * canvas.width;
-        offsetY = (settings.offsetY / 100) * canvas.height;
-      } else {
-        // 像素模式：直接使用像素值
-        offsetX = settings.offsetX;
-        offsetY = settings.offsetY;
-      }
       
       // Draw watermark grid with consistent positioning and apply offsets
       for (let row = 0; row < rows; row++) {
@@ -1638,29 +1707,13 @@ function App() {
               
               if (settings.position === 'full-screen') {
                 // 全屏水印模式
-                // Calculate spacing based on unit type
-                let spacingX: number, spacingY: number;
-                if (appSettings.fontSizeUnit === 'percent') {
-                  // 百分比模式：基于图片尺寸的百分比
-                  spacingX = (settings.spacingX / 100) * img.width;
-                  spacingY = (settings.spacingY / 100) * img.height;
-                } else {
-                  // 像素模式：基于文字尺寸的倍数
-                  spacingX = maxTextWidth * settings.spacingX;
-                  spacingY = totalTextHeight * settings.spacingY;
-                }
-                
-                // Calculate offsets based on unit type
-                let offsetX: number, offsetY: number;
-                if (appSettings.fontSizeUnit === 'percent') {
-                  // 百分比模式：基于图片尺寸的百分比
-                  offsetX = (settings.offsetX / 100) * img.width;
-                  offsetY = (settings.offsetY / 100) * img.height;
-                } else {
-                  // 像素模式：直接使用像素值
-                  offsetX = settings.offsetX;
-                  offsetY = settings.offsetY;
-                }
+                // Spacing is now a multiplier of the watermark's dimensions
+                const spacingX = maxTextWidth + settings.spacingX;
+                const spacingY = totalTextHeight + settings.spacingY;
+
+                // Calculate offsets as a percentage of the image size
+                const offsetX = (settings.offsetX / 100) * img.width;
+                const offsetY = (settings.offsetY / 100) * img.height;
                 
                 const cols = Math.ceil(img.width / spacingX) + 2;
                 const rows = Math.ceil(img.height / spacingY) + 2;
@@ -2456,9 +2509,14 @@ function App() {
                   <div className="mt-4 space-y-3">
                     {/* 水平位移 */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-2">
-                        {t.offsetX}: {watermarkSettings.offsetX.toFixed(0)}%
-                      </label>
+                      <EditableNumber
+                        label={`${t.offsetX}:`}
+                        value={watermarkSettings.offsetX}
+                        onChange={(newValue) => updateSetting('offsetX', newValue)}
+                        unit="%"
+                        min={-100}
+                        max={100}
+                      />
                       <input
                         type="range"
                         min="-100"
@@ -2474,9 +2532,14 @@ function App() {
                     
                     {/* 垂直位移 */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-2">
-                        {t.offsetY}: {watermarkSettings.offsetY.toFixed(0)}%
-                      </label>
+                      <EditableNumber
+                        label={`${t.offsetY}:`}
+                        value={watermarkSettings.offsetY}
+                        onChange={(newValue) => updateSetting('offsetY', newValue)}
+                        unit="%"
+                        min={-100}
+                        max={100}
+                      />
                       <input
                         type="range"
                         min="-100"
@@ -2494,13 +2557,19 @@ function App() {
                     <div className={`space-y-3 overflow-hidden transition-all duration-300 ease-in-out ${watermarkSettings.position === 'full-screen' ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}>
                       {/* 水平间隔 */}
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          {t.spacingX}: {appSettings.fontSizeUnit === 'percent' ? watermarkSettings.spacingX.toFixed(1) + '%' : watermarkSettings.spacingX + 'x'}
-                        </label>
+                        <EditableNumber
+                          label={`${t.spacingX}:`}
+                          value={watermarkSettings.spacingX}
+                          onChange={(newValue) => updateSetting('spacingX', newValue)}
+                          unit={appSettings.fontSizeUnit === 'percent' ? '%' : 'x'}
+                          step={appSettings.fontSizeUnit === 'percent' ? 0.1 : 0.5}
+                          min={1}
+                          max={100}
+                        />
                         <input
                           type="range"
                           min="1"
-                          max="10"
+                          max="100"
                           step={appSettings.fontSizeUnit === 'percent' ? '0.1' : '0.5'}
                           value={watermarkSettings.spacingX}
                           onChange={(e) => updateSetting('spacingX', parseFloat(e.target.value))}
@@ -2512,13 +2581,19 @@ function App() {
                       
                       {/* 垂直间隔 */}
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-2">
-                          {t.spacingY}: {appSettings.fontSizeUnit === 'percent' ? watermarkSettings.spacingY.toFixed(1) + '%' : watermarkSettings.spacingY + 'x'}
-                        </label>
+                        <EditableNumber
+                          label={`${t.spacingY}:`}
+                          value={watermarkSettings.spacingY}
+                          onChange={(newValue) => updateSetting('spacingY', newValue)}
+                          unit={appSettings.fontSizeUnit === 'percent' ? '%' : 'x'}
+                          step={appSettings.fontSizeUnit === 'percent' ? 0.1 : 0.5}
+                          min={1}
+                          max={100}
+                        />
                         <input
                           type="range"
                           min="1"
-                          max="10"
+                          max="100"
                           step={appSettings.fontSizeUnit === 'percent' ? '0.1' : '0.5'}
                           value={watermarkSettings.spacingY}
                           onChange={(e) => updateSetting('spacingY', parseFloat(e.target.value))}
@@ -2541,9 +2616,15 @@ function App() {
                   <div className="space-y-4">
                     {/* Size */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-2">
-                        {t.size}: {appSettings.fontSizeUnit === 'percent' ? watermarkSettings.size.toFixed(1) : watermarkSettings.size}{appSettings.fontSizeUnit === 'percent' ? '%' : 'px'}
-                      </label>
+                      <EditableNumber
+                        label={`${t.size}:`}
+                        value={watermarkSettings.size}
+                        onChange={(newValue) => updateSetting('size', newValue)}
+                        min={appSettings.minSize}
+                        max={appSettings.maxSize}
+                        step={appSettings.fontSizeUnit === 'percent' ? 0.1 : 1}
+                        unit={appSettings.fontSizeUnit === 'percent' ? '%' : 'px'}
+                      />
                       <input
                         type="range"
                         min={appSettings.minSize}
@@ -2552,48 +2633,56 @@ function App() {
                         value={watermarkSettings.size}
                         onChange={(e) => updateSetting('size', appSettings.fontSizeUnit === 'percent' ? parseFloat(e.target.value) : parseInt(e.target.value))}
                         onDoubleClick={() => updateSetting('size', appSettings.defaultSize)}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider mt-2"
                         title="双击恢复默认值"
                       />
                     </div>
 
                     {/* Rotation */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-2">
-                        <div className="flex items-center space-x-1">
-                          <RotateCw className="w-3 h-3" />
-                          <span>{t.rotation}: {watermarkSettings.rotation}°</span>
-                        </div>
-                      </label>
+                      <EditableNumber
+                        label={`${t.rotation}:`}
+                        value={watermarkSettings.rotation}
+                        onChange={(newValue) => updateSetting('rotation', newValue)}
+                        min={-180}
+                        max={180}
+                        step={1}
+                        unit="°"
+                        toFixedValue={0}
+                      />
                       <input
                         type="range"
                         min="-180"
                         max="180"
                         value={watermarkSettings.rotation}
-                        onChange={(e) => updateSetting('rotation', parseInt(e.target.value))}
+                        onChange={(e) => updateSetting('rotation', parseInt(e.target.value, 10))}
                         onDoubleClick={() => updateSetting('rotation', appSettings.defaultRotation)}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider mt-2"
                         title="双击恢复默认值"
                       />
                     </div>
 
                     {/* Opacity */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-2">
-                        <div className="flex items-center space-x-1">
-                          <Eye className="w-3 h-3" />
-                          <span>{t.opacity}: {Math.round(watermarkSettings.opacity * 100)}%</span>
-                        </div>
-                      </label>
+                      <EditableNumber
+                        label={`${t.opacity}:`}
+                        value={watermarkSettings.opacity}
+                        onChange={(newValue) => updateSetting('opacity', newValue)}
+                        min={appSettings.minOpacity}
+                        max={appSettings.maxOpacity}
+                        step={0.01}
+                        unit=""
+                        toFixedValue={2}
+                      />
                       <input
                         type="range"
                         min={appSettings.minOpacity}
                         max={appSettings.maxOpacity}
-                        step="0.1"
+                        step="0.01"
                         value={watermarkSettings.opacity}
                         onChange={(e) => updateSetting('opacity', parseFloat(e.target.value))}
                         onDoubleClick={() => updateSetting('opacity', appSettings.defaultOpacity)}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider mt-2"
                         title="双击恢复默认值"
                       />
                     </div>
