@@ -17,6 +17,7 @@ import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw';
 import CheckSquare from 'lucide-react/dist/esm/icons/check-square';
 import Square from 'lucide-react/dist/esm/icons/square';
 import Loader2 from 'lucide-react/dist/esm/icons/loader-2';
+import Plus from 'lucide-react/dist/esm/icons/plus';
 
 const EditableNumber = ({
   value,
@@ -2278,19 +2279,19 @@ function App() {
           </div>
 
           {/* Thumbnail Strip */}
-          {images.length > 1 && (
+          {images.length > 0 && (
             <div className="bg-white border-t border-gray-200 p-4 min-h-[112px] flex-shrink-0" onContextMenu={handleThumbnailContextMenu}>
-              <div className="flex space-x-3 overflow-x-auto pb-2 h-20">
+              <div className="flex space-x-3 overflow-x-auto p-2 h-24">
                 {images.map((img, index) => (
                   <div
                     key={img.id}
                     onClick={(e) => handleImageSelect(index, e)}
-                    className={`relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 ${
+                    className={`relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden cursor-pointer transition-shadow duration-200 ${
                       index === currentImageIndex
-                        ? 'ring-2 ring-blue-500 shadow-lg scale-105'
+                        ? 'ring-2 ring-blue-500 shadow-lg'
                         : selectedImageIds.has(img.id)
                         ? 'ring-2 ring-purple-500 shadow-md'
-                        : 'hover:shadow-md hover:scale-102'
+                        : 'hover:shadow-md hover:ring-2 hover:ring-blue-400'
                     }`}
                   >
                     <img
@@ -2303,15 +2304,16 @@ function App() {
                         <CheckSquare className="w-3 h-3" />
                       </div>
                     )}
-                    {index === currentImageIndex && (
-                      <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
-                        <div className="bg-blue-500 text-white rounded-full p-1">
-                          <Eye className="w-3 h-3" />
-                        </div>
-                      </div>
-                    )}
+
                   </div>
                 ))}
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-shrink-0 w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors ml-2"
+                  title={t.uploadNewImage}
+                >
+                  <Plus className="w-8 h-8 text-gray-400" />
+                </div>
               </div>
             </div>
           )}
