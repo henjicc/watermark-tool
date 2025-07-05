@@ -1977,7 +1977,7 @@ function App() {
 
           {/* Thumbnail Strip */}
           {images.length > 0 && (
-            <div className="bg-white border-t border-gray-200 p-4 min-h-[112px] flex-shrink-0" onContextMenu={handleThumbnailContextMenu}>
+            <div className="hidden md:flex bg-white border-t border-gray-200 p-4 min-h-[112px] flex-shrink-0" onContextMenu={handleThumbnailContextMenu}>
               <div className="flex space-x-3 overflow-x-auto p-2 h-24">
                 {images.map((img, index) => (
                   <div
