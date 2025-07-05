@@ -772,7 +772,7 @@ function App() {
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
 
-    setIsLoading(true);
+
     
     try {
       const newImages: ImageData[] = [];
@@ -2242,7 +2242,7 @@ function App() {
                     type="file"
                     accept="image/*"
                     multiple
-                    onChange={handleImageUpload}
+                    onChange={(e) => { setIsLoading(true); handleImageUpload(e); }}
                     className="hidden"
                   />
                 </div>
@@ -2293,7 +2293,7 @@ function App() {
                     type="file"
                     accept="image/*"
                     multiple
-                    onChange={handleImageUpload}
+                    onChange={(e) => { setIsLoading(true); handleImageUpload(e); }}
                     className="hidden"
                   />
                 </>
