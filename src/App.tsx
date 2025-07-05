@@ -525,13 +525,13 @@ function App() {
     
     const containerRect = container.getBoundingClientRect();
     // 减去一些padding，确保有足够的边距
-    const containerWidth = Math.max(200, containerRect.width - 40);
-    const containerHeight = Math.max(200, containerRect.height - 40);
+    const containerWidth = Math.max(200, containerRect.width);
+    const containerHeight = Math.max(200, containerRect.height);
     
     // 计算图片的缩放比例以完整铺满容器
     const scaleX = containerWidth / image.width;
     const scaleY = containerHeight / image.height;
-    const scale = Math.min(scaleX, scaleY, 1); // 保持宽高比，但不超过原始尺寸
+    const scale = Math.min(scaleX, scaleY); // 保持宽高比，适应容器
     
     // 计算缩放后的尺寸，确保最小尺寸
     const scaledWidth = Math.max(100, image.width * scale);
