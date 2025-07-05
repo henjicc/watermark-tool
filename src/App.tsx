@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { WatermarkSettings, AppSettings, WatermarkPreset, ImageData } from './types';
+import { translations, defaultAppSettings } from './i18n';
 // 改为按需导入图标，减少被广告拦截器识别为广告的可能性
 import Upload from 'lucide-react/dist/esm/icons/upload';
 import Download from 'lucide-react/dist/esm/icons/download';
@@ -121,393 +123,25 @@ const EditableNumber = ({
 };
 
 
-interface WatermarkSettings {
-  text: string;
-  position: string;
-  size: number;
-  rotation: number;
-  opacity: number;
-  color: string;
-  fontFamily: string;
-  offsetX: number; // 水平位移
-  offsetY: number; // 垂直位移
-  spacingX: number; // 水平间隔
-  spacingY: number; // 垂直间隔
-}
-
-interface WatermarkPreset {
-  id: string;
-  name: string;
-  settings: WatermarkSettings;
-  createdAt: string;
-}
-
-interface AppSettings {
-  language: 'zh' | 'en';
-  defaultWatermark: string;
-  defaultPosition: string;
-  defaultSize: number;
-  defaultRotation: number;
-  defaultOpacity: number;
-  defaultColor: string;
-  defaultFontFamily: string;
-  defaultOffsetX: number;
-  defaultOffsetY: number;
-  defaultSpacingX: number;
-  defaultSpacingY: number;
-  minSize: number;
-  maxSize: number;
-  minOpacity: number;
-  maxOpacity: number;
-  exportFormat: 'auto' | 'jpeg' | 'png' | 'webp';
-  exportQuality: number;
-  fontSizeUnit: 'px' | 'percent';
-}
-
 type Language = 'zh' | 'en';
 
-interface Translations {
-  zh: {
-    title: string;
-    subtitle: string;
-    uploadTitle: string;
-    uploadSubtitle: string;
-    uploadHint: string;
-    watermarkText: string;
-    position: string;
-    style: string;
-    size: string;
-    rotation: string;
-    opacity: string;
-    color: string;
-    font: string;
-    fullScreenPattern: string;
-    sampleWatermark: string;
-    enterWatermarkText: string;
-    settings: string;
-    appSettings: string;
-    defaultSettings: string;
-    defaultWatermark: string;
-    defaultPosition: string;
-    defaultStyle: string;
-    rangeSettings: string;
-    minSize: string;
-    maxSize: string;
-    minOpacity: string;
-    maxOpacity: string;
-    offsetX: string;
-    offsetY: string;
-    spacingX: string;
-    spacingY: string;
-    save: string;
-    cancel: string;
-    reset: string;
-    downloadImage: string;
-    uploadNewImage: string;
-    syncSettings: string;
-    syncAllImages: string;
-    selectAll: string;
-    deselectAll: string;
-    selectedImages: string;
-    presets: string;
-    savePreset: string;
-    loadPreset: string;
-    deletePreset: string;
-    exportPresets: string;
-    importPresets: string;
-    presetName: string;
-    enterPresetName: string;
-    noPresets: string;
-    confirmDelete: string;
-    loadingImages: string;
-    exportFormat: string;
-    exportQuality: string;
-    formatAuto: string;
-    formatJpeg: string;
-    formatPng: string;
-    formatWebp: string;
-    fontSizeUnit: string;
-    fontSizeUnitPx: string;
-    fontSizeUnitPercent: string;
-    positions: {
-      'top-left': string;
-      'top-center': string;
-      'top-right': string;
-      'middle-left': string;
-      'center': string;
-      'middle-right': string;
-      'bottom-left': string;
-      'bottom-center': string;
-      'bottom-right': string;
-      'full-screen': string;
-    };
-  };
-  en: {
-    title: string;
-    subtitle: string;
-    uploadTitle: string;
-    uploadSubtitle: string;
-    uploadHint: string;
-    watermarkText: string;
-    position: string;
-    style: string;
-    size: string;
-    rotation: string;
-    opacity: string;
-    color: string;
-    font: string;
-    fullScreenPattern: string;
-    sampleWatermark: string;
-    enterWatermarkText: string;
-    settings: string;
-    appSettings: string;
-    defaultSettings: string;
-    defaultWatermark: string;
-    defaultPosition: string;
-    defaultStyle: string;
-    rangeSettings: string;
-    minSize: string;
-    maxSize: string;
-    minOpacity: string;
-    maxOpacity: string;
-    offsetX: string;
-    offsetY: string;
-    spacingX: string;
-    spacingY: string;
-    save: string;
-    cancel: string;
-    reset: string;
-    downloadImage: string;
-    uploadNewImage: string;
-    syncSettings: string;
-    syncAllImages: string;
-    selectAll: string;
-    deselectAll: string;
-    selectedImages: string;
-    presets: string;
-    savePreset: string;
-    loadPreset: string;
-    deletePreset: string;
-    exportPresets: string;
-    importPresets: string;
-    presetName: string;
-    enterPresetName: string;
-    noPresets: string;
-    confirmDelete: string;
-    loadingImages: string;
-    exportFormat: string;
-    exportQuality: string;
-    formatAuto: string;
-    formatJpeg: string;
-    formatPng: string;
-    formatWebp: string;
-    fontSizeUnit: string;
-    fontSizeUnitPx: string;
-    fontSizeUnitPercent: string;
-    positions: {
-      'top-left': string;
-      'top-center': string;
-      'top-right': string;
-      'middle-left': string;
-      'center': string;
-      'middle-right': string;
-      'bottom-left': string;
-      'bottom-center': string;
-      'bottom-right': string;
-      'full-screen': string;
-    };
-  };
-}
 
-const translations: Translations = {
-  zh: {
-    title: '水印大师',
-    subtitle: '专业图片水印工具',
-    uploadTitle: '上传您的图片',
-    uploadSubtitle: '拖拽或点击选择',
-    uploadHint: '支持 JPG、PNG、GIF、HEIC、HEIF',
-    watermarkText: '水印文字',
-    position: '位置',
-    style: '样式',
-    size: '大小',
-    rotation: '旋转',
-    opacity: '透明度',
-    color: '颜色',
-    font: '字体',
-    fullScreenPattern: '满屏水印',
-    sampleWatermark: '示例水印',
-    enterWatermarkText: '输入水印文字',
-    settings: '设置',
-    appSettings: '应用设置',
-    defaultSettings: '默认设置',
-    defaultWatermark: '默认水印文字',
-    defaultPosition: '默认位置',
-    defaultStyle: '默认样式',
-    rangeSettings: '范围设置',
-    minSize: '最小字体大小',
-    maxSize: '最大字体大小',
-    minOpacity: '最小透明度',
-    maxOpacity: '最大透明度',
-    offsetX: '水平位移',
-    offsetY: '垂直位移',
-    spacingX: '水平间隔',
-    spacingY: '垂直间隔',
-    save: '保存',
-    cancel: '取消',
-    reset: '重置',
-    downloadImage: '下载图片',
-    uploadNewImage: '上传新图片',
-    syncSettings: '同步设置到选中图片',
-    syncAllImages: '同步设置到所有图片',
-    selectAll: '全选',
-    deselectAll: '取消全选',
-    selectedImages: '已选择',
-    presets: '预设',
-    savePreset: '保存预设',
-    loadPreset: '加载预设',
-    deletePreset: '删除预设',
-    exportPresets: '导出预设',
-    importPresets: '导入预设',
-    presetName: '预设名称',
-    enterPresetName: '输入预设名称',
-    noPresets: '暂无预设',
-    confirmDelete: '确认删除此预设？',
-    loadingImages: '正在加载图片...',
-    exportFormat: '导出格式',
-    exportQuality: '导出质量',
-    formatAuto: '自动选择',
-    formatJpeg: 'JPEG',
-    formatPng: 'PNG',
-    formatWebp: 'WebP',
-    fontSizeUnit: '字体大小单位',
-    fontSizeUnitPx: '像素',
-    fontSizeUnitPercent: '百分比',
-    positions: {
-      'top-left': '左上角',
-      'top-center': '顶部居中',
-      'top-right': '右上角',
-      'middle-left': '左侧居中',
-      'center': '居中',
-      'middle-right': '右侧居中',
-      'bottom-left': '左下角',
-      'bottom-center': '底部居中',
-      'bottom-right': '右下角',
-      'full-screen': '满屏水印'
-    }
-  },
-  en: {
-    title: 'Watermark Pro',
-    subtitle: 'Professional Image Watermarking Tool',
-    uploadTitle: 'Upload Your Images',
-    uploadSubtitle: 'Drag & Drop or Click to Select',
-    uploadHint: 'Supports JPG, PNG, GIF, HEIC, HEIF',
-    watermarkText: 'Watermark Text',
-    position: 'Position',
-    style: 'Style',
-    size: 'Size',
-    rotation: 'Rotation',
-    opacity: 'Opacity',
-    color: 'Color',
-    font: 'Font',
-    fullScreenPattern: 'Full Screen Pattern',
-    sampleWatermark: 'Sample Watermark',
-    enterWatermarkText: 'Enter watermark text',
-    settings: 'Settings',
-    appSettings: 'Application Settings',
-    defaultSettings: 'Default Settings',
-    defaultWatermark: 'Default Watermark Text',
-    defaultPosition: 'Default Position',
-    defaultStyle: 'Default Style',
-    rangeSettings: 'Range Settings',
-    minSize: 'Min Font Size',
-    maxSize: 'Max Font Size',
-    minOpacity: 'Min Opacity',
-    maxOpacity: 'Max Opacity',
-    offsetX: 'Horizontal Offset',
-    offsetY: 'Vertical Offset',
-    spacingX: 'Horizontal Spacing',
-    spacingY: 'Vertical Spacing',
-    save: 'Save',
-    cancel: 'Cancel',
-    reset: 'Reset',
-    downloadImage: 'Download Image',
-    uploadNewImage: 'Upload New Image',
-    syncSettings: 'Sync Settings to Selected',
-    syncAllImages: 'Sync Settings to All Images',
-    selectAll: 'Select All',
-    deselectAll: 'Deselect All',
-    selectedImages: 'Selected',
-    presets: 'Presets',
-    savePreset: 'Save Preset',
-    loadPreset: 'Load Preset',
-    deletePreset: 'Delete Preset',
-    exportPresets: 'Export Presets',
-    importPresets: 'Import Presets',
-    presetName: 'Preset Name',
-    enterPresetName: 'Enter preset name',
-    noPresets: 'No presets available',
-    confirmDelete: 'Confirm delete this preset?',
-    loadingImages: 'Loading images...',
-    exportFormat: 'Export Format',
-    exportQuality: 'Export Quality',
-    formatAuto: 'Auto Select',
-    formatJpeg: 'JPEG',
-    formatPng: 'PNG',
-    formatWebp: 'WebP',
-    fontSizeUnit: 'Font Size Unit',
-    fontSizeUnitPx: 'Pixels',
-    fontSizeUnitPercent: 'Percentage',
-    positions: {
-      'top-left': 'Top Left',
-      'top-center': 'Top Center',
-      'top-right': 'Top Right',
-      'middle-left': 'Middle Left',
-      'center': 'Center',
-      'middle-right': 'Middle Right',
-      'bottom-left': 'Bottom Left',
-      'bottom-center': 'Bottom Center',
-      'bottom-right': 'Bottom Right',
-      'full-screen': 'Full Screen'
-    }
-  }
-};
-
-const defaultAppSettings: AppSettings = {
-  language: 'zh',
-  defaultWatermark: '示例水印',
-  defaultPosition: 'center',
-  defaultSize: 10,
-  defaultRotation: 0,
-  defaultOpacity: 0.7,
-  defaultColor: '#ffffff',
-  defaultFontFamily: 'Arial',
-  defaultOffsetX: 0,
-  defaultOffsetY: 0,
-  defaultSpacingX: 100,
-  defaultSpacingY: 100,
-  minSize: 1,
-  maxSize: 100,
-  minOpacity: 0.1,
-  maxOpacity: 1.0,
-  exportFormat: 'auto',
-  exportQuality: 0.95,
-  fontSizeUnit: 'percent'
-};
-
-interface ImageData {
-  id: string;
-  file: File;
-  url: string;
-  image: HTMLImageElement;
-  watermarkSettings: WatermarkSettings;
-  canvas?: HTMLCanvasElement;
-  originalFile?: File; // 保存原始文件引用（用于HEIC转换后的EXIF处理）
-}
 
 function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [tempSettings, setTempSettings] = useState<AppSettings>(defaultAppSettings);
+  
+  // 控制台输出辅助函数
+  const debugLog = (message: string, data?: any) => {
+    if (appSettings.enableConsoleOutput) {
+      if (data !== undefined) {
+        console.log(`[水印工具] ${message}`, data);
+      } else {
+        console.log(`[水印工具] ${message}`);
+      }
+    }
+  };
   const [images, setImages] = useState<ImageData[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
@@ -624,7 +258,7 @@ function App() {
     if (savedPresets) {
       try {
         const parsed = JSON.parse(savedPresets);
-        console.log('Loading presets from localStorage:', parsed);
+        debugLog('从本地存储加载预设', parsed);
         setPresets(parsed);
       } catch (error) {
         console.error('Failed to load presets:', error);
@@ -641,7 +275,7 @@ function App() {
   // Save presets to localStorage whenever presets change (only after initial load)
   useEffect(() => {
     if (presetsLoaded) {
-      console.log('Saving presets to localStorage:', presets);
+      debugLog('保存预设到本地存储', presets);
       localStorage.setItem('watermark-presets', JSON.stringify(presets));
     }
   }, [presets, presetsLoaded]);
@@ -657,6 +291,11 @@ function App() {
       createdAt: new Date().toISOString()
     };
     
+    debugLog(`保存水印预设: ${newPreset.name}`, {
+      id: newPreset.id,
+      settings: newPreset.settings
+    });
+    
     setPresets(prev => [...prev, newPreset]);
     setPresetName('');
     setShowPresetModal(false);
@@ -665,6 +304,10 @@ function App() {
   const loadPreset = (presetId: string) => {
     const preset = presets.find(p => p.id === presetId);
     if (preset) {
+      debugLog(`加载水印预设: ${preset.name}`, {
+        id: preset.id,
+        settings: preset.settings
+      });
       setWatermarkSettings({ ...preset.settings });
       setSelectedPresetId(presetId);
     }
@@ -717,7 +360,7 @@ function App() {
   // Load local fonts using Local Font Access API
   const loadLocalFonts = async () => {
     if (!('queryLocalFonts' in window)) {
-      console.log('Local Font Access API not supported');
+      debugLog('本地字体访问API不支持');
       return;
     }
 
@@ -744,11 +387,11 @@ function App() {
       
       setLocalFonts(uniqueFonts);
       setFontPermissionGranted(true);
-      console.log(`Loaded ${uniqueFonts.length} local fonts`);
+      debugLog(`加载了 ${uniqueFonts.length} 个本地字体`);
     } catch (error) {
       console.error('Failed to load local fonts:', error);
       if (error instanceof DOMException && error.name === 'NotAllowedError') {
-        console.log('User denied permission to access local fonts');
+        debugLog('用户拒绝访问本地字体权限');
       }
     } finally {
       setFontsLoading(false);
@@ -772,7 +415,7 @@ function App() {
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
 
-
+    debugLog(`开始上传 ${files.length} 个文件`, files.map(f => ({ name: f.name, size: f.size, type: f.type })));
     
     try {
       const newImages: ImageData[] = [];
@@ -809,11 +452,11 @@ function App() {
             URL.revokeObjectURL(url);
             url = URL.createObjectURL(processedFile);
             
-            console.log(`Converted HEIC/HEIF file: ${file.name} to JPEG`);
+            debugLog(`HEIC/HEIF文件转换完成: ${file.name} -> JPEG`);
           } catch (conversionError) {
             console.error('Failed to convert HEIC/HEIF file:', conversionError);
             // 如果转换失败，尝试直接使用原文件
-            console.log('Attempting to use original HEIC/HEIF file directly');
+            debugLog('尝试直接使用原始HEIC/HEIF文件');
           }
         }
         
@@ -837,12 +480,18 @@ function App() {
         newImages.push(imageData);
       }
 
-      setImages(prev => [...prev, ...newImages]);
+      setImages(prev => {
+        const updatedImages = [...prev, ...newImages];
+        setCurrentImageIndex(updatedImages.length - 1);
+        return updatedImages;
+      });
       
-      // If this is the first upload, set current image
-      if (images.length === 0) {
-        setCurrentImageIndex(0);
-      }
+      debugLog(`成功上传 ${newImages.length} 个图片`, newImages.map(img => ({ 
+        id: img.id, 
+        name: img.file.name, 
+        size: `${img.image.width}x${img.image.height}`,
+        watermarkText: img.watermarkSettings.text
+      })));
       
       // Add fade-in animation delay
       setTimeout(() => {
@@ -1072,6 +721,12 @@ function App() {
   const handleDownload = async () => {
     if (!canvasRef.current || !currentImage) return;
     
+    debugLog(`开始下载图片: ${currentImage.file.name}`, {
+      originalSize: `${currentImage.image.width}x${currentImage.image.height}`,
+      watermarkText: currentImage.watermarkSettings.text,
+      position: currentImage.watermarkSettings.position
+    });
+    
     const canvas = canvasRef.current;
     const link = document.createElement('a');
     
@@ -1133,7 +788,7 @@ function App() {
         
         if (isHeicFormat) {
           // 使用exifreader处理HEIC文件的EXIF信息
-          console.log('检测到HEIC格式，使用exifreader提取EXIF信息...');
+          debugLog('检测到HEIC格式，使用exifreader提取EXIF信息...');
           const ExifReader = await import('exifreader');
           
           // 读取文件为ArrayBuffer
@@ -1314,12 +969,12 @@ function App() {
             
             // 记录映射的标签数量
             const mappedCount = Object.keys(tags).filter(tagName => tagMapping[tagName]).length;
-            console.log(`成功从HEIC文件提取EXIF信息: 总共${Object.keys(tags).length}个标签，映射了${mappedCount}个标签`);
+            debugLog(`成功从HEIC文件提取EXIF信息: 总共${Object.keys(tags).length}个标签，映射了${mappedCount}个标签`);
             
             // 输出未映射的标签以便调试
             const unmappedTags = Object.keys(tags).filter(tagName => !tagMapping[tagName]);
             if (unmappedTags.length > 0) {
-              console.log('未映射的EXIF标签:', unmappedTags.slice(0, 10)); // 只显示前10个
+              debugLog('未映射的EXIF标签:', unmappedTags.slice(0, 10)); // 只显示前10个
             }
             
             
@@ -1342,9 +997,9 @@ function App() {
           
           try {
             exifData = piexif.default.load('data:image/jpeg;base64,' + originalImageData);
-            console.log('成功从JPEG文件提取EXIF信息');
+            debugLog('成功从JPEG文件提取EXIF信息');
           } catch (exifError) {
-            console.log('原始图片没有EXIF信息或格式不支持:', exifError);
+            debugLog('原始图片没有EXIF信息或格式不支持:', exifError);
           }
         }
         
@@ -1367,7 +1022,7 @@ function App() {
           const exifBytes = piexif.default.dump(exifData);
           dataURL = piexif.default.insert(exifBytes, dataURL);
           
-          console.log('成功保留EXIF信息到导出图片');
+          debugLog('成功保留EXIF信息到导出图片');
         }
       } catch (error) {
         console.error('处理EXIF信息时出错:', error);
@@ -1375,9 +1030,16 @@ function App() {
       }
     }
     
-    link.download = `watermarked-${currentImage.file.name.replace(/\.[^/.]+$/, fileExtension)}`;
+    const fileName = `watermarked-${currentImage.file.name.replace(/\.[^/.]+$/, fileExtension)}`;
+    link.download = fileName;
     link.href = dataURL;
     link.click();
+    
+    debugLog(`图片下载完成: ${fileName}`, {
+      format: outputFormat,
+      quality: quality,
+      hasExif: outputFormat === 'image/jpeg'
+    });
   };
 
   // 使用 useRef 跟踪最新的设置值，避免频繁的状态更新
@@ -1385,12 +1047,15 @@ function App() {
   
   // 优化的设置更新函数，特别针对拖动调整的场景
   const updateSetting = (key: keyof WatermarkSettings, value: string | number) => {
+    debugLog(`更新水印设置: ${key} = ${value}`);
+    
     if (key === 'position' && value === 'full-screen') {
       setWatermarkSettings(prev => ({
         ...prev,
         position: 'full-screen',
         rotation: -30,
       }));
+      debugLog('切换到全屏水印模式，自动设置旋转角度为 -30°');
       return;
     }
     let newSettings = { ...latestSettingsRef.current, [key]: value };
@@ -1684,6 +1349,8 @@ function App() {
   // 批量操作函数
   const handleBatchDownload = async () => {
     if (selectedImageIds.size > 0) {
+      debugLog(`开始批量下载 ${selectedImageIds.size} 个图片`, Array.from(selectedImageIds));
+      
       // 下载选中的图片
       for (const imageId of selectedImageIds) {
         const imageData = images.find(img => img.id === imageId);
@@ -1848,7 +1515,7 @@ function App() {
                 
                 if (isHeicFormat) {
                   // 使用exifreader处理HEIC文件的EXIF信息
-                  console.log('检测到HEIC格式，使用exifreader提取EXIF信息...');
+                  debugLog('检测到HEIC格式，使用exifreader提取EXIF信息...');
                   const ExifReader = await import('exifreader');
                   
                   // 读取文件为ArrayBuffer
@@ -2029,12 +1696,12 @@ function App() {
                      
                      // 记录映射的标签数量
                      const mappedCount = Object.keys(tags).filter(tagName => tagMapping[tagName]).length;
-                     console.log(`成功从HEIC文件提取EXIF信息: 总共${Object.keys(tags).length}个标签，映射了${mappedCount}个标签`);
+                     debugLog(`成功从HEIC文件提取EXIF信息: 总共${Object.keys(tags).length}个标签，映射了${mappedCount}个标签`);
                      
                      // 输出未映射的标签以便调试
                      const unmappedTags = Object.keys(tags).filter(tagName => !tagMapping[tagName]);
                      if (unmappedTags.length > 0) {
-                       console.log('未映射的EXIF标签:', unmappedTags.slice(0, 10)); // 只显示前10个
+                       debugLog('未映射的EXIF标签:', unmappedTags.slice(0, 10)); // 只显示前10个
                      }
                     
        
@@ -2057,9 +1724,9 @@ function App() {
                   
                   try {
                     exifData = piexif.default.load('data:image/jpeg;base64,' + originalImageData);
-                    console.log('成功从JPEG文件提取EXIF信息');
+                    debugLog('成功从JPEG文件提取EXIF信息');
                   } catch (exifError) {
-                    console.log('原始图片没有EXIF信息或格式不支持:', exifError);
+                    debugLog('原始图片没有EXIF信息或格式不支持:', exifError);
                   }
                 }
                 
@@ -2082,7 +1749,7 @@ function App() {
                   const exifBytes = piexif.default.dump(exifData);
                   dataURL = piexif.default.insert(exifBytes, dataURL);
                   
-                  console.log('成功保留EXIF信息到导出图片');
+                  debugLog('成功保留EXIF信息到导出图片');
                 }
               } catch (error) {
                 console.error('处理EXIF信息时出错:', error);
@@ -2226,7 +1893,14 @@ function App() {
             images.length === 0 ? 'opacity-100' : isLoading ? 'opacity-50' : 'opacity-100'
           }`}>
             <div className="w-full h-full bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex items-center justify-center relative">
-              {images.length === 0 ? (
+              {isLoading && images.length === 0 ? (
+                <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
+                  <div className="flex flex-col items-center space-y-4">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                    <p className="text-gray-600">{t.loadingImages}</p>
+                  </div>
+                </div>
+              ) : images.length === 0 ? (
                 <div className="text-center p-4 lg:p-8 animate-fade-in flex items-center justify-center w-full h-full">
                   <div 
                     onClick={() => fileInputRef.current?.click()}
@@ -3187,6 +2861,44 @@ function App() {
                         PNG格式无损压缩，不需要质量设置
                       </p>
                     )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Developer Settings */}
+              <div className="bg-gray-50 rounded-xl p-4">
+                <div className="flex items-center space-x-2 mb-3">
+                  <div className="w-4 h-4 text-green-500">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0L19.2 12l-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
+                    </svg>
+                  </div>
+                  <h3 className="text-base font-semibold text-gray-900">
+                    {tempSettings.language === 'zh' ? '开发者设置' : 'Developer Settings'}
+                  </h3>
+                </div>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {translations[tempSettings.language].enableConsoleOutput}
+                      </label>
+                      <p className="text-xs text-gray-500">
+                        {translations[tempSettings.language].consoleOutputDescription}
+                      </p>
+                    </div>
+                    <div className="ml-4">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={tempSettings.enableConsoleOutput}
+                          onChange={(e) => setTempSettings(prev => ({ ...prev, enableConsoleOutput: e.target.checked }))}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
