@@ -10,6 +10,14 @@ body {
   user-select: none; /* Standard syntax */
 }
 
+/* 允许输入框和文本区域正常选择文本和输入 */
+input,
+textarea {
+  -webkit-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+}
+
 /* 自定义动画 */
 @keyframes fade-in {
   from {

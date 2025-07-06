@@ -197,6 +197,19 @@ function App() {
   // Add keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // 检查当前焦点是否在输入框或文本区域中
+      const activeElement = document.activeElement;
+      const isInputFocused = activeElement && (
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        (activeElement as HTMLElement).contentEditable === 'true'
+      );
+      
+      // 如果焦点在输入框中，不处理全局快捷键
+      if (isInputFocused) {
+        return;
+      }
+      
       // Check if Ctrl (or Cmd on Mac) is pressed
       if (event.ctrlKey || event.metaKey) {
         switch (event.key.toLowerCase()) {
