@@ -1057,6 +1057,7 @@ function App() {
 
   // 使用 useRef 跟踪最新的设置值，避免频繁的状态更新
   const latestSettingsRef = useRef(watermarkSettings);
+  const isComposing = useRef(false);
   
   // 优化的设置更新函数，特别针对拖动调整的场景
   const updateSetting = (key: keyof WatermarkSettings, value: string | number) => {
@@ -1103,8 +1104,7 @@ function App() {
     // 更新最新设置的引用
     latestSettingsRef.current = newSettings;
     
-    // 使用 requestAnimationFrame 优化 UI 更新
-    requestAnimationFrame(() => {
+    const updateState = () => {
       setWatermarkSettings(newSettings);
       
       // 更新当前图片设置
@@ -1115,7 +1115,15 @@ function App() {
             : img
         ));
       }
-    });
+    };
+
+    // For text input, update immediately to avoid issues with IME
+    if (key === 'text') {
+      updateState();
+    } else {
+      // Use requestAnimationFrame for other controls to optimize performance
+      requestAnimationFrame(updateState);
+    }
   };
   
   // 同步 latestSettingsRef 和 watermarkSettings
@@ -2185,6 +2193,11 @@ function App() {
                   <textarea
                     value={watermarkSettings.text}
                     onChange={(e) => updateSetting('text', e.target.value)}
+                    onCompositionStart={() => isComposing.current = true}
+                    onCompositionEnd={(e) => {
+                      isComposing.current = false;
+                      updateSetting('text', (e.target as HTMLTextAreaElement).value);
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm resize-vertical min-h-[60px]"
                     placeholder={t.enterWatermarkText}
                     rows={3}
