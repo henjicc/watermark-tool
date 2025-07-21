@@ -481,12 +481,21 @@ function App() {
           img.src = url;
         });
 
+        // 根据设置决定水印文本
+        const finalWatermarkSettings = { ...watermarkSettings };
+        if (appSettings.useFilenameAsWatermark) {
+          // 使用文件名作为水印文本（去除扩展名）
+          const filename = processedFile.name;
+          const nameWithoutExtension = filename.substring(0, filename.lastIndexOf('.')) || filename;
+          finalWatermarkSettings.text = nameWithoutExtension;
+        }
+
         const imageData: ImageData = {
           id: `${Date.now()}-${Math.random()}`,
           file: processedFile,
           url,
           image: img,
-          watermarkSettings: { ...watermarkSettings },
+          watermarkSettings: finalWatermarkSettings,
           originalFile: isHeicFormat ? file : undefined // 保存原始HEIC文件引用
         };
         
@@ -495,7 +504,12 @@ function App() {
 
       setImages(prev => {
         const updatedImages = [...prev, ...newImages];
-        setCurrentImageIndex(updatedImages.length - 1);
+        const newIndex = updatedImages.length - 1;
+        setCurrentImageIndex(newIndex);
+        // 同步更新当前水印设置为新上传图片的设置
+        if (newImages.length > 0) {
+          setWatermarkSettings(newImages[newImages.length - 1].watermarkSettings);
+        }
         return updatedImages;
       });
       
@@ -2604,6 +2618,29 @@ function App() {
                       />
                     </div>
 
+                    {/* Use Filename as Watermark */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          {translations[tempSettings.language].useFilenameAsWatermark}
+                        </label>
+                        <p className="text-xs text-gray-500">
+                          {translations[tempSettings.language].useFilenameAsWatermarkDescription}
+                        </p>
+                      </div>
+                      <div className="ml-4">
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tempSettings.useFilenameAsWatermark}
+                            onChange={(e) => setTempSettings(prev => ({ ...prev, useFilenameAsWatermark: e.target.checked }))}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                      </div>
+                    </div>
+
                     {/* Default Position */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2926,6 +2963,8 @@ function App() {
                       </label>
                     </div>
                   </div>
+                  
+
                 </div>
               </div>
 

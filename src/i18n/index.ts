@@ -82,6 +82,8 @@ export const translations: Translations = {
     fontSizeUnitPercent: '百分比',
     enableConsoleOutput: '启用控制台输出',
     consoleOutputDescription: '开启后将在浏览器控制台显示调试信息',
+    useFilenameAsWatermark: '使用文件名作为默认水印文本',
+    useFilenameAsWatermarkDescription: '开启后将自动使用上传图片的文件名作为默认水印文本',
     positions: {
       'top-left': '左上角',
       'top-center': '顶部居中',
@@ -159,6 +161,8 @@ export const translations: Translations = {
     fontSizeUnitPercent: 'Percentage',
     enableConsoleOutput: 'Enable Console Output',
     consoleOutputDescription: 'Enable debug information output to browser console',
+    useFilenameAsWatermark: 'Use Filename as Watermark Text',
+    useFilenameAsWatermarkDescription: 'Automatically use uploaded image filename as watermark text',
     positions: {
       'top-left': 'Top Left',
       'top-center': 'Top Center',
@@ -195,5 +199,6 @@ export const defaultAppSettings = {
   exportFormat: 'auto' as const,
   exportQuality: 0.95,
   fontSizeUnit: 'percent' as const,
-  enableConsoleOutput: false
+  enableConsoleOutput: false,
+  useFilenameAsWatermark: false
 };

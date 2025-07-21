@@ -35,6 +35,7 @@ export interface AppSettings {
   exportQuality: number;
   fontSizeUnit: 'px' | 'percent';
   enableConsoleOutput: boolean;
+  useFilenameAsWatermark: boolean;
 }
 
 // 水印预设接口
@@ -122,6 +123,8 @@ export interface Translations {
     fontSizeUnitPercent: string;
     enableConsoleOutput: string;
     consoleOutputDescription: string;
+    useFilenameAsWatermark: string;
+    useFilenameAsWatermarkDescription: string;
     positions: {
       'top-left': string;
       'top-center': string;
@@ -199,6 +202,8 @@ export interface Translations {
     fontSizeUnitPercent: string;
     enableConsoleOutput: string;
     consoleOutputDescription: string;
+    useFilenameAsWatermark: string;
+    useFilenameAsWatermarkDescription: string;
     positions: {
       'top-left': string;
       'top-center': string;
