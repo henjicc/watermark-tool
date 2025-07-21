@@ -130,7 +130,6 @@ type Language = 'zh' | 'en';
 function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [tempSettings, setTempSettings] = useState<AppSettings>(defaultAppSettings);
   
   // 控制台输出辅助函数
   const debugLog = (message: string, data?: any) => {
@@ -245,7 +244,7 @@ function App() {
       try {
         const parsed = JSON.parse(savedSettings);
         setAppSettings(parsed);
-        setTempSettings(parsed);
+        // Settings are now auto-saved, no need for temp settings
         
         // Update watermark settings with loaded defaults
         setWatermarkSettings({
@@ -1203,23 +1202,20 @@ function App() {
     }
   };
 
-  const handleSaveSettings = () => {
-    setAppSettings(tempSettings);
-    setShowSettingsModal(false);
+  const handleResetSettings = () => {
+    setAppSettings(defaultAppSettings);
+    localStorage.setItem('watermark-app-settings', JSON.stringify(defaultAppSettings));
+  };
+
+  const updateAppSetting = (key: keyof AppSettings, value: any) => {
+    const newSettings = { ...appSettings, [key]: value };
+    setAppSettings(newSettings);
+    localStorage.setItem('watermark-app-settings', JSON.stringify(newSettings));
     
     // Update current watermark settings if they match defaults
-    if (watermarkSettings.text === appSettings.defaultWatermark) {
-      setWatermarkSettings(prev => ({ ...prev, text: tempSettings.defaultWatermark }));
+    if (key === 'defaultWatermark' && watermarkSettings.text === appSettings.defaultWatermark) {
+      setWatermarkSettings(prev => ({ ...prev, text: value }));
     }
-  };
-
-  const handleCancelSettings = () => {
-    setTempSettings(appSettings);
-    setShowSettingsModal(false);
-  };
-
-  const handleResetSettings = () => {
-    setTempSettings(defaultAppSettings);
   };
 
   const resetToDefaults = () => {
@@ -2576,7 +2572,7 @@ function App() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">{t.appSettings}</h2>
                 <button
-                  onClick={handleCancelSettings}
+                  onClick={() => setShowSettingsModal(false)}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5" />
@@ -2591,10 +2587,10 @@ function App() {
                     <h3 className="text-base font-semibold text-gray-900">Language / 语言</h3>
                   </div>
                   <select
-                    value={tempSettings.language}
-                    onChange={(e) => setTempSettings(prev => ({ ...prev, language: e.target.value as Language }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
+                      value={appSettings.language}
+                      onChange={(e) => updateAppSetting('language', e.target.value as Language)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
                     <option value="zh">简体中文</option>
                     <option value="en">English</option>
                   </select>
@@ -2602,40 +2598,40 @@ function App() {
 
                 {/* Default Settings */}
                 <div className="bg-gray-50 rounded-xl p-4">
-                  <h3 className="text-base font-semibold text-gray-900 mb-4">{translations[tempSettings.language].defaultSettings}</h3>
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">{translations[appSettings.language].defaultSettings}</h3>
                   
                   <div className="space-y-4">
                     {/* Default Watermark Text */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {translations[tempSettings.language].defaultWatermark}
-                      </label>
-                      <input
-                        type="text"
-                        value={tempSettings.defaultWatermark}
-                        onChange={(e) => setTempSettings(prev => ({ ...prev, defaultWatermark: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {translations[appSettings.language].defaultWatermark}
+                        </label>
+                        <input
+                          type="text"
+                          value={appSettings.defaultWatermark}
+                          onChange={(e) => updateAppSetting('defaultWatermark', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
 
                     {/* Use Filename as Watermark */}
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          {translations[tempSettings.language].useFilenameAsWatermark}
-                        </label>
-                        <p className="text-xs text-gray-500">
-                          {translations[tempSettings.language].useFilenameAsWatermarkDescription}
-                        </p>
-                      </div>
-                      <div className="ml-4">
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={tempSettings.useFilenameAsWatermark}
-                            onChange={(e) => setTempSettings(prev => ({ ...prev, useFilenameAsWatermark: e.target.checked }))}
-                            className="sr-only peer"
-                          />
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {translations[appSettings.language].useFilenameAsWatermark}
+                          </label>
+                          <p className="text-xs text-gray-500">
+                            {translations[appSettings.language].useFilenameAsWatermarkDescription}
+                          </p>
+                        </div>
+                        <div className="ml-4">
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={appSettings.useFilenameAsWatermark}
+                              onChange={(e) => updateAppSetting('useFilenameAsWatermark', e.target.checked)}
+                              className="sr-only peer"
+                            />
                           <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                         </label>
                       </div>
@@ -2644,16 +2640,16 @@ function App() {
                     {/* Default Position */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {translations[tempSettings.language].defaultPosition}
+                        {translations[appSettings.language].defaultPosition}
                       </label>
                       <select
-                        value={tempSettings.defaultPosition}
-                        onChange={(e) => setTempSettings(prev => ({ ...prev, defaultPosition: e.target.value }))}
+                        value={appSettings.defaultPosition}
+                        onChange={(e) => updateAppSetting('defaultPosition', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       >
                         {positions.map((pos) => (
                           <option key={pos.id} value={pos.id}>
-                            {translations[tempSettings.language].positions[pos.id as keyof typeof translations.zh.positions]}
+                            {translations[appSettings.language].positions[pos.id as keyof typeof translations.zh.positions]}
                           </option>
                         ))}
                       </select>
@@ -2663,61 +2659,61 @@ function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {translations[tempSettings.language].size}
+                          {translations[appSettings.language].size}
                         </label>
                         <input
                           type="number"
-                          value={tempSettings.defaultSize}
-                          onChange={(e) => setTempSettings(prev => ({ ...prev, defaultSize: parseInt(e.target.value) }))}
+                          value={appSettings.defaultSize}
+                          onChange={(e) => updateAppSetting('defaultSize', parseInt(e.target.value))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {translations[tempSettings.language].fontSizeUnit}
+                          {translations[appSettings.language].fontSizeUnit}
                         </label>
                         <select
-                          value={tempSettings.fontSizeUnit}
-                          onChange={(e) => setTempSettings(prev => ({ ...prev, fontSizeUnit: e.target.value as 'px' | 'percent' }))}
+                          value={appSettings.fontSizeUnit}
+                          onChange={(e) => updateAppSetting('fontSizeUnit', e.target.value as 'px' | 'percent')}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
-                          <option value="percent">{translations[tempSettings.language].fontSizeUnitPercent}</option>
-                          <option value="px">{translations[tempSettings.language].fontSizeUnitPx}</option>
+                          <option value="percent">{translations[appSettings.language].fontSizeUnitPercent}</option>
+                          <option value="px">{translations[appSettings.language].fontSizeUnitPx}</option>
                         </select>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {translations[tempSettings.language].rotation}
+                          {translations[appSettings.language].rotation}
                         </label>
                         <input
                           type="number"
-                          value={tempSettings.defaultRotation}
-                          onChange={(e) => setTempSettings(prev => ({ ...prev, defaultRotation: parseInt(e.target.value) }))}
+                          value={appSettings.defaultRotation}
+                          onChange={(e) => updateAppSetting('defaultRotation', parseInt(e.target.value))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {translations[tempSettings.language].opacity}
+                          {translations[appSettings.language].opacity}
                         </label>
                         <input
                           type="number"
                           step="0.1"
                           min="0"
                           max="1"
-                          value={tempSettings.defaultOpacity}
-                          onChange={(e) => setTempSettings(prev => ({ ...prev, defaultOpacity: parseFloat(e.target.value) }))}
+                          value={appSettings.defaultOpacity}
+                          onChange={(e) => updateAppSetting('defaultOpacity', parseFloat(e.target.value))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {translations[tempSettings.language].color}
+                          {translations[appSettings.language].color}
                         </label>
                         <input
                           type="color"
-                          value={tempSettings.defaultColor}
-                          onChange={(e) => setTempSettings(prev => ({ ...prev, defaultColor: e.target.value }))}
+                          value={appSettings.defaultColor}
+                          onChange={(e) => updateAppSetting('defaultColor', e.target.value)}
                           className="w-full h-10 border border-gray-300 rounded-lg cursor-pointer"
                         />
                       </div>
@@ -2726,11 +2722,11 @@ function App() {
                     {/* Default Font */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {translations[tempSettings.language].font}
+                        {translations[appSettings.language].font}
                       </label>
                       <select
-                        value={tempSettings.defaultFontFamily}
-                        onChange={(e) => setTempSettings(prev => ({ ...prev, defaultFontFamily: e.target.value }))}
+                        value={appSettings.defaultFontFamily}
+                        onChange={(e) => updateAppSetting('defaultFontFamily', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       >
                         {/* 默认字体 */}
@@ -2763,23 +2759,23 @@ function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {translations[tempSettings.language].offsetX}
+                          {translations[appSettings.language].offsetX}
                         </label>
                         <input
                           type="number"
-                          value={tempSettings.defaultOffsetX}
-                          onChange={(e) => setTempSettings(prev => ({ ...prev, defaultOffsetX: parseInt(e.target.value) }))}
+                          value={appSettings.defaultOffsetX}
+                          onChange={(e) => updateAppSetting('defaultOffsetX', parseInt(e.target.value))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {translations[tempSettings.language].offsetY}
+                          {translations[appSettings.language].offsetY}
                         </label>
                         <input
                           type="number"
-                          value={tempSettings.defaultOffsetY}
-                          onChange={(e) => setTempSettings(prev => ({ ...prev, defaultOffsetY: parseInt(e.target.value) }))}
+                          value={appSettings.defaultOffsetY}
+                          onChange={(e) => updateAppSetting('defaultOffsetY', parseInt(e.target.value))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
@@ -2789,29 +2785,29 @@ function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {translations[tempSettings.language].spacingX}
+                          {translations[appSettings.language].spacingX}
                         </label>
                         <input
                           type="number"
                           step="0.5"
                           min="1"
                           max="10"
-                          value={tempSettings.defaultSpacingX}
-                          onChange={(e) => setTempSettings(prev => ({ ...prev, defaultSpacingX: parseFloat(e.target.value) }))}
+                          value={appSettings.defaultSpacingX}
+                          onChange={(e) => updateAppSetting('defaultSpacingX', parseFloat(e.target.value))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {translations[tempSettings.language].spacingY}
+                          {translations[appSettings.language].spacingY}
                         </label>
                         <input
                           type="number"
                           step="0.5"
                           min="1"
                           max="10"
-                          value={tempSettings.defaultSpacingY}
-                          onChange={(e) => setTempSettings(prev => ({ ...prev, defaultSpacingY: parseFloat(e.target.value) }))}
+                          value={appSettings.defaultSpacingY}
+                          onChange={(e) => updateAppSetting('defaultSpacingY', parseFloat(e.target.value))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
@@ -2821,56 +2817,56 @@ function App() {
 
                 {/* Range Settings */}
                 <div className="bg-gray-50 rounded-xl p-4">
-                  <h3 className="text-base font-semibold text-gray-900 mb-4">{translations[tempSettings.language].rangeSettings}</h3>
+                  <h3 className="text-base font-semibold text-gray-900 mb-4">{translations[appSettings.language].rangeSettings}</h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {translations[tempSettings.language].minSize}
+                        {translations[appSettings.language].minSize}
                       </label>
                       <input
                         type="number"
-                        value={tempSettings.minSize}
-                        onChange={(e) => setTempSettings(prev => ({ ...prev, minSize: parseInt(e.target.value) }))}
+                        value={appSettings.minSize}
+                        onChange={(e) => updateAppSetting('minSize', parseInt(e.target.value))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {translations[tempSettings.language].maxSize}
+                        {translations[appSettings.language].maxSize}
                       </label>
                       <input
                         type="number"
-                        value={tempSettings.maxSize}
-                        onChange={(e) => setTempSettings(prev => ({ ...prev, maxSize: parseInt(e.target.value) }))}
+                        value={appSettings.maxSize}
+                        onChange={(e) => updateAppSetting('maxSize', parseInt(e.target.value))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {translations[tempSettings.language].minOpacity}
+                        {translations[appSettings.language].minOpacity}
                       </label>
                       <input
                         type="number"
                         step="0.1"
                         min="0"
                         max="1"
-                        value={tempSettings.minOpacity}
-                        onChange={(e) => setTempSettings(prev => ({ ...prev, minOpacity: parseFloat(e.target.value) }))}
+                        value={appSettings.minOpacity}
+                        onChange={(e) => updateAppSetting('minOpacity', parseFloat(e.target.value))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {translations[tempSettings.language].maxOpacity}
+                        {translations[appSettings.language].maxOpacity}
                       </label>
                       <input
                         type="number"
                         step="0.1"
                         min="0"
                         max="1"
-                        value={tempSettings.maxOpacity}
-                        onChange={(e) => setTempSettings(prev => ({ ...prev, maxOpacity: parseFloat(e.target.value) }))}
+                        value={appSettings.maxOpacity}
+                        onChange={(e) => updateAppSetting('maxOpacity', parseFloat(e.target.value))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
@@ -2880,27 +2876,27 @@ function App() {
 
               {/* Export Settings */}
               <div className="bg-gray-50 rounded-xl p-4">
-                <h3 className="text-base font-semibold text-gray-900 mb-4">{translations[tempSettings.language].exportFormat}</h3>
+                <h3 className="text-base font-semibold text-gray-900 mb-4">{translations[appSettings.language].exportFormat}</h3>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {translations[tempSettings.language].exportFormat}
+                      {translations[appSettings.language].exportFormat}
                     </label>
                     <select
-                      value={tempSettings.exportFormat}
-                      onChange={(e) => setTempSettings(prev => ({ ...prev, exportFormat: e.target.value as 'auto' | 'jpeg' | 'png' | 'webp' }))}
+                      value={appSettings.exportFormat}
+                      onChange={(e) => updateAppSetting('exportFormat', e.target.value as 'auto' | 'jpeg' | 'png' | 'webp')}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
-                      <option value="auto">{translations[tempSettings.language].formatAuto}</option>
-                      <option value="jpeg">{translations[tempSettings.language].formatJpeg}</option>
-                      <option value="png">{translations[tempSettings.language].formatPng}</option>
-                      <option value="webp">{translations[tempSettings.language].formatWebp}</option>
+                      <option value="auto">{translations[appSettings.language].formatAuto}</option>
+                      <option value="jpeg">{translations[appSettings.language].formatJpeg}</option>
+                      <option value="png">{translations[appSettings.language].formatPng}</option>
+                      <option value="webp">{translations[appSettings.language].formatWebp}</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {translations[tempSettings.language].exportQuality}
+                      {translations[appSettings.language].exportQuality}
                     </label>
                     <div className="flex items-center space-x-2">
                       <input
@@ -2908,18 +2904,18 @@ function App() {
                         min="0.1"
                         max="1"
                         step="0.05"
-                        value={tempSettings.exportQuality}
-                        onChange={(e) => setTempSettings(prev => ({ ...prev, exportQuality: parseFloat(e.target.value) }))}
-                        onDoubleClick={() => setTempSettings(prev => ({ ...prev, exportQuality: defaultAppSettings.exportQuality }))}
+                        value={appSettings.exportQuality}
+                        onChange={(e) => updateAppSetting('exportQuality', parseFloat(e.target.value))}
+                        onDoubleClick={() => updateAppSetting('exportQuality', defaultAppSettings.exportQuality)}
                         className="flex-1"
-                        disabled={tempSettings.exportFormat === 'png'}
+                        disabled={appSettings.exportFormat === 'png'}
                         title="双击恢复默认值"
                       />
                       <span className="text-sm text-gray-600 w-12">
-                        {Math.round(tempSettings.exportQuality * 100)}%
+                        {Math.round(appSettings.exportQuality * 100)}%
                       </span>
                     </div>
-                    {tempSettings.exportFormat === 'png' && (
+                    {appSettings.exportFormat === 'png' && (
                       <p className="text-xs text-gray-500 mt-1">
                         PNG格式无损压缩，不需要质量设置
                       </p>
@@ -2937,7 +2933,7 @@ function App() {
                     </svg>
                   </div>
                   <h3 className="text-base font-semibold text-gray-900">
-                    {tempSettings.language === 'zh' ? '开发者设置' : 'Developer Settings'}
+                    {appSettings.language === 'zh' ? '开发者设置' : 'Developer Settings'}
                   </h3>
                 </div>
                 
@@ -2945,18 +2941,18 @@ function App() {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {translations[tempSettings.language].enableConsoleOutput}
+                        {translations[appSettings.language].enableConsoleOutput}
                       </label>
                       <p className="text-xs text-gray-500">
-                        {translations[tempSettings.language].consoleOutputDescription}
+                        {translations[appSettings.language].consoleOutputDescription}
                       </p>
                     </div>
                     <div className="ml-4">
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={tempSettings.enableConsoleOutput}
-                          onChange={(e) => setTempSettings(prev => ({ ...prev, enableConsoleOutput: e.target.checked }))}
+                          checked={appSettings.enableConsoleOutput}
+                          onChange={(e) => updateAppSetting('enableConsoleOutput', e.target.checked)}
                           className="sr-only peer"
                         />
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -2969,27 +2965,13 @@ function App() {
               </div>
 
               {/* Modal Actions */}
-              <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-200">
+              <div className="flex justify-center items-center mt-8 pt-6 border-t border-gray-200">
                 <button
                   onClick={handleResetSettings}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
                 >
-                  {translations[tempSettings.language].reset}
+                  {translations[appSettings.language].reset}
                 </button>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={handleCancelSettings}
-                    className="px-6 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    {translations[tempSettings.language].cancel}
-                  </button>
-                  <button
-                    onClick={handleSaveSettings}
-                    className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                  >
-                    {translations[tempSettings.language].save}
-                  </button>
-                </div>
               </div>
             </div>
           </div>
