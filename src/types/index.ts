@@ -1,5 +1,9 @@
+// 水印类型
+export type WatermarkType = 'text' | 'image';
+
 // 水印设置接口
 export interface WatermarkSettings {
+  type: WatermarkType; // 水印类型：文本或图片
   text: string;
   position: string;
   size: number;
@@ -11,6 +15,12 @@ export interface WatermarkSettings {
   offsetY: number; // 垂直位移
   spacingX: number; // 水平间隔
   spacingY: number; // 垂直间隔
+  // 图片水印相关
+  imageData?: string; // base64 图片数据
+  imageName?: string; // 图片文件名
+  imageWidth?: number; // 图片宽度（像素）
+  imageHeight?: number; // 图片高度（像素）
+  // 图片水印默认保持宽高比，不再需要单独的选项
 }
 
 // 应用设置接口

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { WatermarkSettings, AppSettings, WatermarkPreset, ImageData } from './types';
+import { WatermarkSettings, AppSettings, WatermarkPreset, ImageData, WatermarkType } from './types';
 import { translations, defaultAppSettings } from './i18n';
 // 改为按需导入图标，减少被广告拦截器识别为广告的可能性
 import Upload from 'lucide-react/dist/esm/icons/upload';
@@ -172,6 +172,7 @@ function App() {
   
   // Stable watermark settings that don't change based on image dimensions
   const [watermarkSettings, setWatermarkSettings] = useState<WatermarkSettings>({
+    type: 'text',
     text: appSettings.defaultWatermark,
     position: appSettings.defaultPosition,
     size: appSettings.defaultSize,
@@ -182,7 +183,12 @@ function App() {
     offsetX: appSettings.defaultOffsetX,
     offsetY: appSettings.defaultOffsetY,
     spacingX: appSettings.defaultSpacingX,
-    spacingY: appSettings.defaultSpacingY
+    spacingY: appSettings.defaultSpacingY,
+    // 图片水印相关设置 - 初始化为空值避免受控/非受控组件警告
+    imageData: '',
+    imageName: '',
+    imageWidth: 0,
+    imageHeight: 0
   });
 
   const t = translations[appSettings.language];
@@ -248,6 +254,7 @@ function App() {
         
         // Update watermark settings with loaded defaults
         setWatermarkSettings({
+          type: 'text',
           text: parsed.defaultWatermark,
           position: parsed.defaultPosition,
           size: parsed.defaultSize,
@@ -258,7 +265,12 @@ function App() {
           offsetX: parsed.defaultOffsetX || 0,
           offsetY: parsed.defaultOffsetY || 0,
           spacingX: parsed.defaultSpacingX || 2,
-          spacingY: parsed.defaultSpacingY || 4
+          spacingY: parsed.defaultSpacingY || 4,
+          // 图片水印相关设置 - 初始化为空值
+          imageData: '',
+          imageName: '',
+          imageWidth: 0,
+          imageHeight: 0
         });
       } catch (error) {
         console.error('Failed to load settings:', error);
@@ -530,17 +542,142 @@ function App() {
     }
   };
 
+  // 处理水印图片上传
+  const handleWatermarkImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      // 创建图片对象来获取尺寸
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      
+      img.onload = () => {
+        // 转换为base64
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        
+        const imageData = canvas.toDataURL();
+        
+        // 更新水印设置
+        updateSetting('imageData', imageData);
+        updateSetting('imageName', file.name);
+        updateSetting('imageWidth', img.width);
+        updateSetting('imageHeight', img.height);
+        
+        // 清理URL
+        URL.revokeObjectURL(url);
+      };
+      
+      img.onerror = () => {
+        console.error('Failed to load watermark image');
+        URL.revokeObjectURL(url);
+      };
+      
+      img.src = url;
+    } catch (error) {
+      console.error('Error uploading watermark image:', error);
+    }
+    
+    // 清空input值，允许重复选择同一文件
+    event.target.value = '';
+  };
+
   // 优化的水印绘制函数，提高渲染性能
   const drawWatermark = useCallback(() => {
     if (!currentImage || !canvasRef.current) return;
 
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d', { alpha: true }); // 支持透明通道
+    const ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: false }); // 支持透明通道，优化性能
     if (!ctx) return;
 
     const { image } = currentImage;
     // 使用 latestSettingsRef 获取最新设置，避免状态更新延迟
     const settings = latestSettingsRef.current;
+    
+    // 性能优化：启用图像平滑
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // 图片水印绘制函数
+    const drawImageWatermark = (ctx: CanvasRenderingContext2D, watermarkImg: HTMLImageElement, settings: WatermarkSettings, image: HTMLImageElement) => {
+      // 计算字体大小用于图片水印尺寸
+      const baseFontSize = settings.size;
+      
+      // 计算图片水印尺寸
+      const imgAspectRatio = watermarkImg.width / watermarkImg.height;
+      let watermarkWidth, watermarkHeight;
+      
+      if (appSettings.fontSizeUnit === 'percent') {
+        // 百分比模式：基于图片宽度的百分比
+        watermarkWidth = (image.width * baseFontSize) / 100;
+        // 图片水印默认保持宽高比
+        watermarkHeight = watermarkWidth / imgAspectRatio;
+      } else {
+        // 像素模式：直接使用像素值
+        watermarkWidth = Math.max(10, Math.min(image.width, baseFontSize));
+        // 图片水印默认保持宽高比
+        watermarkHeight = watermarkWidth / imgAspectRatio;
+      }
+      
+      // 绘制图片水印
+      if (settings.position === 'full-screen') {
+        // 全屏模式
+        const spacingX = watermarkWidth + settings.spacingX;
+        const spacingY = watermarkHeight + settings.spacingY;
+        const offsetX = (settings.offsetX / 100) * canvas.width;
+        const offsetY = (settings.offsetY / 100) * canvas.height;
+        
+        const cols = Math.ceil(canvas.width / spacingX) + 2;
+        const rows = Math.floor(canvas.height / spacingY) + 2;
+        
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const x = col * spacingX - spacingX / 2 + offsetX;
+            const y = row * spacingY + offsetY;
+            
+            ctx.save();
+            ctx.translate(x + watermarkWidth / 2, y + watermarkHeight / 2);
+            ctx.rotate((settings.rotation * Math.PI) / 180);
+            ctx.drawImage(watermarkImg, -watermarkWidth / 2, -watermarkHeight / 2, watermarkWidth, watermarkHeight);
+            ctx.restore();
+          }
+        }
+      } else {
+        // 单个水印模式
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        
+        const angle = (settings.rotation * Math.PI) / 180;
+        const sin = Math.abs(Math.sin(angle));
+        const cos = Math.abs(Math.cos(angle));
+        const rotatedWidth = watermarkWidth * cos + watermarkHeight * sin;
+        const rotatedHeight = watermarkWidth * sin + watermarkHeight * cos;
+        
+        const safeWidth = canvas.width - rotatedWidth;
+        const safeHeight = canvas.height - rotatedHeight;
+        
+        const offsetX = (settings.offsetX / 100) * (safeWidth / 2);
+        const offsetY = (settings.offsetY / 100) * (safeHeight / 2);
+        
+        const x = centerX + offsetX;
+        const y = centerY - offsetY;
+        
+        const clampedX = Math.max(rotatedWidth / 2, Math.min(x, canvas.width - rotatedWidth / 2));
+        const clampedY = Math.max(rotatedHeight / 2, Math.min(y, canvas.height - rotatedHeight / 2));
+        
+        ctx.save();
+        ctx.translate(clampedX, clampedY);
+        ctx.rotate((settings.rotation * Math.PI) / 180);
+        ctx.drawImage(watermarkImg, -watermarkWidth / 2, -watermarkHeight / 2, watermarkWidth, watermarkHeight);
+        ctx.restore();
+      }
+    };
 
     // 获取预览容器的尺寸 - 查找最外层的预览容器
     let container = canvas.parentElement;
@@ -595,7 +732,43 @@ function App() {
       actualFontSize = Math.max(8, Math.min(200, baseFontSize));
     }
 
-    // Set watermark style with stable values
+    // 根据水印类型设置样式
+    if (settings.type === 'image' && settings.imageData) {
+      // 图片水印处理
+      ctx.globalAlpha = settings.opacity;
+      
+      // 使用缓存的图片对象，避免重复加载导致闪烁
+      const cacheKey = settings.imageData;
+      let watermarkImg = watermarkImageCache.current.get(cacheKey);
+      
+      if (watermarkImg && watermarkImg.complete && watermarkImg.naturalWidth > 0) {
+        // 图片已缓存且加载完成，直接绘制
+        drawImageWatermark(ctx, watermarkImg, settings, image);
+      } else {
+        // 图片未缓存或未加载完成，创建新的图片对象
+        watermarkImg = new Image();
+        watermarkImg.crossOrigin = 'anonymous'; // 避免跨域问题
+        watermarkImg.onload = () => {
+          // 缓存图片对象
+          watermarkImageCache.current.set(cacheKey, watermarkImg!);
+          // 使用requestAnimationFrame确保在下一帧绘制，避免阻塞
+          requestAnimationFrame(() => {
+            drawImageWatermark(ctx, watermarkImg!, settings, image);
+          });
+        };
+        watermarkImg.onerror = () => {
+          console.warn('水印图片加载失败');
+        };
+        watermarkImg.src = settings.imageData;
+      }
+      
+      ctx.globalAlpha = 1;
+      return; // 图片水印处理完毕，直接返回
+    }
+    
+
+    
+    // 文字水印处理
     ctx.font = `${actualFontSize}px ${settings.fontFamily}`;
     ctx.fillStyle = settings.color;
     ctx.globalAlpha = settings.opacity;
@@ -1070,10 +1243,13 @@ function App() {
 
   // 使用 useRef 跟踪最新的设置值，避免频繁的状态更新
   const latestSettingsRef = useRef(watermarkSettings);
+  const watermarkImageCache = useRef<Map<string, HTMLImageElement>>(new Map());
+  const drawTimeoutRef = useRef<number>();
   const isComposing = useRef(false);
+  const animationFrameRef = useRef<number>();
   
   // 优化的设置更新函数，特别针对拖动调整的场景
-  const updateSetting = (key: keyof WatermarkSettings, value: string | number) => {
+  const updateSetting = (key: keyof WatermarkSettings, value: string | number | undefined) => {
     debugLog(`更新水印设置: ${key} = ${value}`);
     
     if (key === 'position' && value === 'full-screen') {
@@ -1134,8 +1310,27 @@ function App() {
     if (key === 'text') {
       updateState();
     } else {
-      // Use requestAnimationFrame for other controls to optimize performance
-      requestAnimationFrame(updateState);
+      // 清除之前的定时器和动画帧
+      if (drawTimeoutRef.current) {
+        clearTimeout(drawTimeoutRef.current);
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      
+      // 对于图片水印的参数调整，使用更短的防抖延迟和requestAnimationFrame优化
+      if (newSettings.type === 'image' && newSettings.imageData) {
+        // 使用更短的防抖延迟（20ms）提高响应性
+        drawTimeoutRef.current = window.setTimeout(() => {
+          // 在防抖后使用requestAnimationFrame确保在下一帧更新
+          animationFrameRef.current = requestAnimationFrame(() => {
+            updateState();
+          });
+        }, 20); // 减少到20ms防抖延迟
+      } else {
+        // Use requestAnimationFrame for other controls to optimize performance
+        animationFrameRef.current = requestAnimationFrame(updateState);
+      }
     }
   };
   
@@ -1143,6 +1338,18 @@ function App() {
   useEffect(() => {
     latestSettingsRef.current = watermarkSettings;
   }, [watermarkSettings]);
+  
+  // 清理函数：组件卸载时清理定时器和动画帧，避免内存泄漏
+  useEffect(() => {
+    return () => {
+      if (drawTimeoutRef.current) {
+        clearTimeout(drawTimeoutRef.current);
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
 
   const handleImageSelect = (index: number, event?: React.MouseEvent) => {
     if (event?.ctrlKey || event?.metaKey) {
@@ -1220,6 +1427,7 @@ function App() {
 
   const resetToDefaults = () => {
     const newSettings = {
+      type: 'text' as const,
       text: appSettings.defaultWatermark,
       position: appSettings.defaultPosition,
       size: appSettings.defaultSize,
@@ -1230,7 +1438,12 @@ function App() {
       offsetX: appSettings.defaultOffsetX,
       offsetY: appSettings.defaultOffsetY,
       spacingX: appSettings.defaultSpacingX,
-      spacingY: appSettings.defaultSpacingY
+      spacingY: appSettings.defaultSpacingY,
+      // 图片水印相关设置 - 重置为空值
+      imageData: '',
+      imageName: '',
+      imageWidth: 0,
+      imageHeight: 0
     };
     
     setWatermarkSettings(newSettings);
@@ -1831,6 +2044,7 @@ function App() {
           return {
             ...img,
             watermarkSettings: {
+              type: 'text' as WatermarkType,
               text: appSettings.defaultWatermark,
               position: appSettings.defaultPosition,
               size: appSettings.defaultSize,
@@ -1841,8 +2055,12 @@ function App() {
               offsetX: appSettings.defaultOffsetX || 0,
               offsetY: appSettings.defaultOffsetY || 0,
               spacingX: appSettings.defaultSpacingX || 2,
-              spacingY: appSettings.defaultSpacingY || 4
-            }
+              spacingY: appSettings.defaultSpacingY || 4,
+              imageData: undefined,
+              imageName: undefined,
+              imageWidth: undefined,
+              imageHeight: undefined
+            } as WatermarkSettings
           };
         }
         return img;
@@ -1852,6 +2070,7 @@ function App() {
       // 如果当前图片在选中列表中，也更新当前的水印设置
       if (currentImage && selectedImageIds.has(currentImage.id)) {
         setWatermarkSettings({
+          type: 'text' as WatermarkType,
           text: appSettings.defaultWatermark,
           position: appSettings.defaultPosition,
           size: appSettings.defaultSize,
@@ -1862,8 +2081,12 @@ function App() {
           offsetX: appSettings.defaultOffsetX || 0,
           offsetY: appSettings.defaultOffsetY || 0,
           spacingX: appSettings.defaultSpacingX || 2,
-          spacingY: appSettings.defaultSpacingY || 4
-        });
+          spacingY: appSettings.defaultSpacingY || 4,
+          imageData: undefined,
+          imageName: undefined,
+          imageWidth: undefined,
+          imageHeight: undefined
+        } as WatermarkSettings);
       }
     } else {
       // 如果没有选中图片，重置当前图片
@@ -2194,24 +2417,111 @@ function App() {
                   )}
                 </div>
 
-                {/* Watermark Text */}
+                {/* Watermark Type Selection */}
                 <div className="bg-gray-50 rounded-xl p-4">
                   <div className="flex items-center space-x-2 mb-3">
                     <Type className="w-4 h-4 text-blue-500" />
-                    <h3 className="text-base font-semibold text-gray-900">{t.watermarkText}</h3>
+                    <h3 className="text-base font-semibold text-gray-900">水印类型</h3>
                   </div>
-                  <textarea
-                    value={watermarkSettings.text}
-                    onChange={(e) => updateSetting('text', e.target.value)}
-                    onCompositionStart={() => isComposing.current = true}
-                    onCompositionEnd={(e) => {
-                      isComposing.current = false;
-                      updateSetting('text', (e.target as HTMLTextAreaElement).value);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm resize-vertical min-h-[60px]"
-                    placeholder={t.enterWatermarkText}
-                    rows={3}
-                  />
+                  <div className="flex space-x-2 mb-3">
+                    <button
+                      onClick={() => updateSetting('type', 'text')}
+                      className={`flex-1 p-2 rounded-lg border-2 transition-all text-sm flex items-center justify-center space-x-2 ${
+                        watermarkSettings.type === 'text'
+                          ? 'border-blue-500 bg-blue-50 text-blue-600'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <Type className="w-4 h-4" />
+                      <span>文字水印</span>
+                    </button>
+                    <button
+                      onClick={() => updateSetting('type', 'image')}
+                      className={`flex-1 p-2 rounded-lg border-2 transition-all text-sm flex items-center justify-center space-x-2 ${
+                        watermarkSettings.type === 'image'
+                          ? 'border-blue-500 bg-blue-50 text-blue-600'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      <span>图片水印</span>
+                    </button>
+                  </div>
+                  
+                  {/* Text Watermark Content */}
+                  {watermarkSettings.type === 'text' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-2">{t.watermarkText}</label>
+                      <textarea
+                        value={watermarkSettings.text}
+                        onChange={(e) => updateSetting('text', e.target.value)}
+                        onCompositionStart={() => isComposing.current = true}
+                        onCompositionEnd={(e) => {
+                          isComposing.current = false;
+                          updateSetting('text', (e.target as HTMLTextAreaElement).value);
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm resize-vertical min-h-[60px]"
+                        placeholder={t.enterWatermarkText}
+                        rows={3}
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Image Watermark Content */}
+                  {watermarkSettings.type === 'image' && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-2">水印图片</label>
+                        <div className="flex items-center space-x-3">
+                          <label className="flex-1 cursor-pointer">
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-500 hover:bg-blue-50 transition-all">
+                              {watermarkSettings.imageData ? (
+                                <div className="flex items-center space-x-2">
+                                  <img 
+                                    src={watermarkSettings.imageData} 
+                                    alt="水印预览" 
+                                    className="w-8 h-8 object-contain rounded"
+                                  />
+                                  <span className="text-sm text-gray-600">
+                                    {watermarkSettings.imageName || '已选择图片'}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center space-y-1">
+                                  <Upload className="w-6 h-6 text-gray-400" />
+                                  <span className="text-sm text-gray-600">点击上传图片</span>
+                                  <span className="text-xs text-gray-400">支持 PNG, JPG, SVG</span>
+                                </div>
+                              )}
+                            </div>
+                            <input
+                              type="file"
+                              accept="image/*,.svg"
+                              onChange={handleWatermarkImageUpload}
+                              className="hidden"
+                            />
+                          </label>
+                          {watermarkSettings.imageData && (
+                            <button
+                              onClick={() => {
+                                updateSetting('imageData', undefined);
+                                updateSetting('imageName', undefined);
+                                updateSetting('imageWidth', undefined);
+                                updateSetting('imageHeight', undefined);
+                              }}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              title="删除图片"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Maintain Aspect Ratio */}
+
+                    </div>
+                  )}
                 </div>
 
                 {/* Position Controls */}
@@ -2430,77 +2740,81 @@ function App() {
                       />
                     </div>
 
-                    {/* Color */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-2">{t.color}</label>
-                      <div className="flex space-x-2">
-                        <input
-                          type="color"
-                          value={watermarkSettings.color}
-                          onChange={(e) => updateSetting('color', e.target.value)}
-                          className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer"
-                        />
-                        <input
-                          type="text"
-                          value={watermarkSettings.color}
-                          onChange={(e) => updateSetting('color', e.target.value)}
-                          className="flex-1 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                        />
+                    {/* Color - Only for text watermarks */}
+                    {watermarkSettings.type === 'text' && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-2">{t.color}</label>
+                        <div className="flex space-x-2">
+                          <input
+                            type="color"
+                            value={watermarkSettings.color}
+                            onChange={(e) => updateSetting('color', e.target.value)}
+                            className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={watermarkSettings.color}
+                            onChange={(e) => updateSetting('color', e.target.value)}
+                            className="flex-1 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    {/* Font Family */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="block text-xs font-medium text-gray-700">{t.font}</label>
-                        {('queryLocalFonts' in window) && (
-                          <button
-                            onClick={loadLocalFonts}
-                            disabled={fontsLoading}
-                            className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            title={fontPermissionGranted ? '重新加载本地字体' : '加载本地字体'}
-                          >
-                            {fontsLoading ? '加载中...' : (fontPermissionGranted ? '刷新' : '加载本地字体')}
-                          </button>
+                    {/* Font Family - Only for text watermarks */}
+                    {watermarkSettings.type === 'text' && (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-xs font-medium text-gray-700">{t.font}</label>
+                          {('queryLocalFonts' in window) && (
+                            <button
+                              onClick={loadLocalFonts}
+                              disabled={fontsLoading}
+                              className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              title={fontPermissionGranted ? '重新加载本地字体' : '加载本地字体'}
+                            >
+                              {fontsLoading ? '加载中...' : (fontPermissionGranted ? '刷新' : '加载本地字体')}
+                            </button>
+                          )}
+                        </div>
+                        <select
+                          value={watermarkSettings.fontFamily}
+                          onChange={(e) => updateSetting('fontFamily', e.target.value)}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        >
+                          {/* 默认字体 */}
+                          <optgroup label="默认字体">
+                            <option value="Arial">Arial</option>
+                            <option value="Helvetica">Helvetica</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                            <option value="Georgia">Georgia</option>
+                            <option value="Courier New">Courier New</option>
+                            <option value="Verdana">Verdana</option>
+                            <option value="SimHei">SimHei (黑体)</option>
+                            <option value="SimSun">SimSun (宋体)</option>
+                            <option value="Microsoft YaHei">Microsoft YaHei (微软雅黑)</option>
+                          </optgroup>
+                          
+                          {/* 本地字体 */}
+                          {localFonts.length > 0 && (
+                            <optgroup label={`本地字体 (${localFonts.length})`}>
+                              {localFonts.map((font) => (
+                                <option key={font.family} value={font.family}>
+                                  {font.family}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </select>
+                        
+                        {/* 字体访问提示 */}
+                        {!('queryLocalFonts' in window) && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            浏览器不支持本地字体访问功能
+                          </p>
                         )}
                       </div>
-                      <select
-                        value={watermarkSettings.fontFamily}
-                        onChange={(e) => updateSetting('fontFamily', e.target.value)}
-                        className="w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      >
-                        {/* 默认字体 */}
-                        <optgroup label="默认字体">
-                          <option value="Arial">Arial</option>
-                          <option value="Helvetica">Helvetica</option>
-                          <option value="Times New Roman">Times New Roman</option>
-                          <option value="Georgia">Georgia</option>
-                          <option value="Courier New">Courier New</option>
-                          <option value="Verdana">Verdana</option>
-                          <option value="SimHei">SimHei (黑体)</option>
-                          <option value="SimSun">SimSun (宋体)</option>
-                          <option value="Microsoft YaHei">Microsoft YaHei (微软雅黑)</option>
-                        </optgroup>
-                        
-                        {/* 本地字体 */}
-                        {localFonts.length > 0 && (
-                          <optgroup label={`本地字体 (${localFonts.length})`}>
-                            {localFonts.map((font) => (
-                              <option key={font.family} value={font.family}>
-                                {font.family}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
-                      
-                      {/* 字体访问提示 */}
-                      {!('queryLocalFonts' in window) && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          浏览器不支持本地字体访问功能
-                        </p>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </div>
               </>
